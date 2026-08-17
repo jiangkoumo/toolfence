@@ -1,0 +1,6 @@
+node_modules/
+dist/
+coverage/
+.toolfence/audit.jsonl
+*.log
+.DS_Store

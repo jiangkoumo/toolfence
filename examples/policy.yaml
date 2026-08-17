@@ -1,0 +1,47 @@
+version: 1
+default: ask
+
+rules:
+  - id: protect-secrets
+    effect: deny
+    operations: [fs.read, fs.write, fs.delete]
+    resources:
+      - "**/.env"
+      - "**/.env.*"
+      - "**/*.pem"
+      - "${home}/.ssh/**"
+
+  - id: allow-project-read
+    effect: allow
+    operations: [fs.read]
+    resources:
+      - "${workspace}/**"
+
+  - id: allow-project-write
+    effect: allow
+    operations: [fs.write]
+    resources:
+      - "${workspace}/src/**"
+      - "${workspace}/test/**"
+
+  - id: allow-safe-commands
+    effect: allow
+    operations: [shell.exec]
+    commands:
+      - [npm, test]
+      - [npm, run, lint]
+
+  - id: allow-git-read
+    effect: allow
+    operations: [git.read]
+
+  - id: allow-read-api
+    effect: allow
+    operations: [net.request]
+    hosts: ["api.example.com", "*.internal.example.com"]
+    methods: [GET, HEAD]
+
+  - id: deny-dangerous-programs
+    effect: deny
+    operations: [shell.exec]
+    executables: [rm, sudo, shutdown]
