@@ -1,9 +1,10 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { mkdtempSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseCli } from "../src/cli.js";
+import { isMainModule, parseCli } from "../src/cli.js";
 import { initPolicy, loadPolicy } from "../src/config.js";
 
 describe("policy init", () => {
@@ -53,5 +54,17 @@ describe("policy init CLI", () => {
     expect(() =>
       parseCli(["policy", "check", "--policy", "policy.yaml", "--cases", "cases.yaml"]),
     ).toThrow("Unknown option for policy check: --cases");
+  });
+});
+
+describe("CLI entry point", () => {
+  it("recognizes an npm-style symlink as the main module", () => {
+    const root = mkdtempSync(join(tmpdir(), "toolfence-main-"));
+    const target = join(root, "cli.js");
+    const link = join(root, "toolfence");
+    writeFileSync(target, "", { flag: "wx" });
+    symlinkSync(target, link);
+
+    expect(isMainModule(link, pathToFileURL(target).href)).toBe(true);
   });
 });

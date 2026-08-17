@@ -33,8 +33,10 @@
     "postbuild": "node --input-type=module -e \"import { chmodSync } from 'node:fs'; chmodSync('dist/cli.js', 0o755)\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "verify": "npm run typecheck && npm test && npm run build && npm pack --dry-run",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+    "test:package": "node scripts/package-smoke.mjs",
+    "release:check": "node scripts/release-check.mjs",
+    "verify": "npm run typecheck && npm test && npm run build && npm run test:package && npm pack --dry-run",
+    "prepublishOnly": "npm run release:check && npm run verify"
   },
   "engines": {
     "node": ">=20"

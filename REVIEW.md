@@ -14,9 +14,9 @@
 
 Verified on 2026-08-17:
 
-- `npm run verify`: passed (typecheck, 50 tests, build, and package dry run).
+- `npm run verify`: passed (typecheck, 51 tests, build, clean-install package smoke, and package dry run).
 - Real integrations: official Filesystem MCP Server plus Shell, HTTP, and Git fixtures passed.
-- macOS runtime matrix: Node.js 20.20.2, 22.22.2, and 24.19.0 all passed typecheck, tests, and build during Alpha review; the final 50-test suite passed on the active runtime.
+- macOS runtime matrix: Node.js 20.20.2, 22.22.2, and 24.19.0 all passed typecheck, tests, and build during Alpha review; the final 51-test suite and package smoke passed on the active runtime.
 - Package inspection: 37 intended files, executable CLI and public TypeScript declarations included.
 - CLI smoke tests: version succeeded; a missing policy returned one actionable line with no stack.
 - `npm audit --omit=dev`: zero production vulnerabilities.
@@ -31,5 +31,6 @@ Review findings fixed before sign-off:
 - Added strict Broker request validation and Broker-side expiry.
 - Added safe starter-policy generation that cannot overwrite an existing file.
 - Made package metadata the CLI version source of truth and exposed the documented library entry point.
+- Fixed installed npm binaries silently exiting when invoked through the package-manager symlink, and added a clean-install tarball smoke gate.
 
 Status: passed local implementation, security, test, audit, and package review. Remote CI and npm trusted-publisher configuration remain the pre-publication gates.

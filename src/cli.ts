@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline/promises";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { stdin as input, stdout as output } from "node:process";
 import { homedir } from "node:os";
 import { basename, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { TtyApprovalRequester } from "./approval.js";
 import { AuditLogger } from "./audit.js";
 import {
@@ -271,6 +271,15 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+export function isMainModule(argvPath: string | undefined, moduleUrl = import.meta.url): boolean {
+  if (!argvPath) return false;
+  try {
+    return realpathSync(argvPath) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return moduleUrl === pathToFileURL(resolve(argvPath)).href;
+  }
+}
+
+if (isMainModule(process.argv[1])) {
   await runCli();
 }

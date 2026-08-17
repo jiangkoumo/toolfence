@@ -2,6 +2,10 @@
 
 The release gate is risk-based: a passing happy path is insufficient unless denial, cancellation, timeout, disconnect, and malformed-input paths are also exercised.
 
+`npm run verify` also packs the built package, installs it into a clean temporary project, exercises the installed npm binary through its real symlink, validates a generated policy, and imports the public ESM API.
+
+`npm run release:check` is a separate publication gate because it intentionally fails until the final public GitHub repository URL is recorded. It also enforces version, changelog, package entry-point, Git cleanliness, tag, and dual-use disclosure consistency.
+
 ## Layers
 
 1. Unit tests cover normalization, canonical paths, strict policy validation, deterministic rule priority, HTTP host/method matching, and canonical Schema fingerprints.

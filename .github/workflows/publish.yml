@@ -20,4 +20,24 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
       - run: npm ci
-      - run: npm publish
+      - run: npm run release:check
+      - run: npm run verify
+      - name: Check registry version
+        id: registry
+        shell: bash
+        run: |
+          package_name=$(node -p "require('./package.json').name")
+          package_version=$(node -p "require('./package.json').version")
+          echo "name=$package_name" >> "$GITHUB_OUTPUT"
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+          if npm view "$package_name@$package_version" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish with npm trusted publishing
+        if: steps.registry.outputs.exists != 'true'
+        run: npm publish
+      - name: Skip an already published version
+        if: steps.registry.outputs.exists == 'true'
+        run: echo "${{ steps.registry.outputs.name }}@${{ steps.registry.outputs.version }} is already available; verification passed."

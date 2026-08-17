@@ -12,6 +12,8 @@ First stable open-source release.
 - Conservative Filesystem, Shell, Git, and HTTP action adapters.
 - A local authenticated approval Broker with one-time and session decisions.
 - Policy validation, explanation, declarative testing, and safe starter-policy generation.
+- Clean-install package verification covering the npm binary symlink and public ESM API.
+- A release preflight that validates version, changelog, repository, package exports, Git state, tag alignment, and dual-use disclosure requirements.
 - Privacy-conscious JSONL auditing that omits raw arguments and results.
 - Real MCP integration tests and a macOS/Linux CI matrix for Node.js 20, 22, and 24.
 
