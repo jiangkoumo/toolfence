@@ -33,4 +33,4 @@ Review findings fixed before sign-off:
 - Made package metadata the CLI version source of truth and exposed the documented library entry point.
 - Fixed installed npm binaries silently exiting when invoked through the package-manager symlink, and added a clean-install tarball smoke gate.
 
-Status: passed local implementation, security, test, audit, and package review. Remote CI and npm trusted-publisher configuration remain the pre-publication gates.
+Status: passed local implementation, security, test, audit, package, and initial remote CI review. The final CI workflow includes the clean-install package smoke; npm account bootstrap and trusted-publisher configuration remain pre-publication gates.
