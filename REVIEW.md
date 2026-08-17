@@ -16,7 +16,7 @@ Verified on 2026-08-17:
 
 - `npm run verify`: passed (typecheck, 51 tests, build, clean-install package smoke, and package dry run).
 - Real integrations: official Filesystem MCP Server plus Shell, HTTP, and Git fixtures passed.
-- macOS runtime matrix: Node.js 20.20.2, 22.22.2, and 24.19.0 all passed typecheck, tests, and build during Alpha review; the final 51-test suite and package smoke passed on the active runtime.
+- macOS runtime matrix: Node.js 20.20.2, 22.23.2, and 24.19.0 all passed the final clean-install package smoke; the 51-test suite, typecheck, and build passed on the active runtime.
 - Package inspection: 37 intended files, executable CLI and public TypeScript declarations included.
 - CLI smoke tests: version succeeded; a missing policy returned one actionable line with no stack.
 - `npm audit --omit=dev`: zero production vulnerabilities.
