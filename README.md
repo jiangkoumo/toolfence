@@ -1,5 +1,7 @@
 # ToolFence
 
+[![CI](https://github.com/jiangkoumo/toolfence/actions/workflows/ci.yml/badge.svg)](https://github.com/jiangkoumo/toolfence/actions/workflows/ci.yml)
+
 ToolFence is a local policy proxy for MCP tool calls. It sits between an MCP client and a stdio MCP server, then allows, denies, or asks for approval before forwarding `tools/call` requests.
 
 ## Status

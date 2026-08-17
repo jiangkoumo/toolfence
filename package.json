@@ -2,6 +2,14 @@
   "name": "toolfence-mcp",
   "version": "0.2.0",
   "description": "A local policy proxy for MCP tool calls.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jiangkoumo/toolfence.git"
+  },
+  "homepage": "https://github.com/jiangkoumo/toolfence#readme",
+  "bugs": {
+    "url": "https://github.com/jiangkoumo/toolfence/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

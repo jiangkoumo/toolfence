@@ -6,7 +6,7 @@ Security fixes are provided for the latest published 0.2.x release. Users should
 
 ## Reporting a vulnerability
 
-Please use the repository's private GitHub vulnerability-reporting or Security Advisory flow. Do not include exploit details, credentials, approval tokens, policy files containing sensitive paths, or audit records in a public issue.
+Please use the repository's [private GitHub Security Advisory flow](https://github.com/jiangkoumo/toolfence/security/advisories/new). Do not include exploit details, credentials, approval tokens, policy files containing sensitive paths, or audit records in a public issue.
 
 Include the affected ToolFence and Node.js versions, operating system, MCP client/server pair, a minimal reproduction, and the expected versus observed policy decision. Redact all secrets and personal paths.
 

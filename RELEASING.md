@@ -4,7 +4,7 @@ Releases after the initial package creation are published from GitHub Actions wi
 
 ## One-time repository setup
 
-1. Create the public GitHub repository and set `repository.url` in `package.json` to its exact `git+https` URL.
+1. Confirm the public repository is `https://github.com/jiangkoumo/toolfence` and `repository.url` in `package.json` is its exact `git+https` URL.
 2. Push the repository and confirm every macOS/Linux CI cell passes.
 3. Enable 2FA on the npm maintainer account. A trusted publisher cannot be configured until the package exists.
 4. Run `npm run release:check`, then create `toolfence-mcp@0.2.0` once with an interactive `npm publish` that completes the 2FA challenge.
@@ -13,7 +13,7 @@ Releases after the initial package creation are published from GitHub Actions wi
    ```bash
    npm trust github toolfence-mcp \
      --file publish.yml \
-     --repo OWNER/REPOSITORY \
+     --repo jiangkoumo/toolfence \
      --allow-publish \
      --yes
    ```
