@@ -10,6 +10,9 @@
   "bugs": {
     "url": "https://github.com/jiangkoumo/toolfence/issues"
   },
+  "contentPolicy": {
+    "class": "dual-use"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -33,6 +36,7 @@
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
+    "DISCLOSURE",
     "README.md",
     "LICENSE"
   ],

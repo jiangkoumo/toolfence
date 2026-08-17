@@ -31,6 +31,6 @@ The initial interactive publish is the only bootstrap exception. After the trust
 5. Create and push an annotated `v<version>` tag. The `publish.yml` workflow validates and publishes through OIDC.
 6. Verify the npm package contents, executable, provenance, and installation from a clean temporary project.
 
-Before the first publish, review npm's current dual-use content policy. If ToolFence is classified as dual-use, add `"contentPolicy": { "class": "dual-use" }` and a root `DISCLOSURE` text file before publishing. That declaration is permanent for later versions and requires 2FA-enforced publishing, so do not add or remove it casually.
+ToolFence is declared as dual-use under npm's current content policy because it launches user-configured processes and mediates Shell, Git, and HTTP capabilities. Every release must retain `"contentPolicy": { "class": "dual-use" }` and the root `DISCLOSURE` text file. npm treats that declaration as permanent and requires 2FA-enforced publishing.
 
 If publication fails, do not reuse or move the tag. Fix the issue, increment the version, and create a new release commit and tag.

@@ -10,6 +10,8 @@ Version 0.2.0 is the first stable open-source release. It includes cancellable a
 
 ToolFence is **not a sandbox for a malicious MCP server process**: the upstream process still runs with the current user's operating-system permissions.
 
+Because ToolFence launches user-configured processes and mediates Shell, Git, and HTTP capabilities, the npm package is transparently declared as dual-use. See [DISCLOSURE](DISCLOSURE) for the intended legitimate use and security boundary.
+
 ## Install
 
 The npm package name is `toolfence-mcp`; the command is `toolfence`.

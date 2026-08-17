@@ -22,6 +22,7 @@ First stable open-source release.
 - Deny rules override allows, multi-resource requests are evaluated as a unit, and unknown actions fail closed.
 - Filesystem resources are canonicalized through existing symbolic links.
 - Broker authentication, request expiry, cancellation, and disconnect paths fail closed.
+- The npm package declares its process-launching and Shell/Git/HTTP mediation capabilities as dual-use and includes the required disclosure.
 
 ### Known limitations
 

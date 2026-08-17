@@ -1,0 +1,13 @@
+ToolFence is a defensive policy proxy for Model Context Protocol (MCP) tool calls.
+
+Dual-use functionality
+
+ToolFence launches user-configured local MCP server processes and mediates requests that may access files, execute shell or Git commands, or make HTTP requests. These general-purpose capabilities can affect arbitrary resources when a user deliberately configures an upstream server and policy to permit them. Process spawning, command inspection, local IPC, and network-action classification may resemble behavior found in offensive or malicious software when examined without context.
+
+Intended legitimate use
+
+ToolFence is intended to help developers reduce accidental or prompt-injected tool misuse. It evaluates normalized actions against explicit allow, deny, or approval rules; fails closed on unknown or ambiguous actions; and records privacy-conscious audit metadata. It does not include exploits, credential theft, persistence mechanisms, evasion features, or autonomous targeting.
+
+Security boundary
+
+ToolFence mediates calls that cross its stdio proxy. It is not an operating-system sandbox and cannot prevent an upstream MCP server process from directly using permissions already granted to that process. Users must only run MCP servers they trust at the operating-system level and should combine ToolFence with process, filesystem, environment, and network isolation where appropriate.
