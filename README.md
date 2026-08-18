@@ -2,7 +2,24 @@
 
 [![CI](https://github.com/jiangkoumo/toolfence/actions/workflows/ci.yml/badge.svg)](https://github.com/jiangkoumo/toolfence/actions/workflows/ci.yml)
 
-ToolFence is a local policy proxy for MCP tool calls. It sits between an MCP client and a stdio MCP server, then allows, denies, or asks for approval before forwarding `tools/call` requests.
+**A local, fail-closed firewall for MCP tool calls.**
+
+ToolFence puts least-privilege policies and human approval between AI agents and stdio MCP servers. It allows safe operations, blocks dangerous ones, and asks before forwarding calls that need a human decision—without requiring code changes to the MCP client or server.
+
+```text
+ALLOW  Read ./src/index.ts
+DENY   Read ~/.ssh/id_rsa
+ASK    Run npm install
+DENY   Run sudo rm -rf ...
+```
+
+## Why ToolFence
+
+- **Semantic policies:** normalize common Filesystem, Shell, Git, and HTTP tool calls into operations such as `fs.read`, `shell.exec`, `git.write`, and `net.request`, then match paths, exact command arguments, hosts, and HTTP methods.
+- **Deterministic enforcement:** `deny` overrides other matches, multi-resource requests are evaluated as a unit, and unknown or ambiguous actions fail closed.
+- **Human approval:** use an authenticated local Broker for one-time or session decisions; session approvals are bound to the tool Schema and are invalidated when that Schema changes.
+- **Privacy-conscious auditing:** record tool identity, affected resources, policy decisions, and result hashes without storing raw arguments or results.
+- **Policies you can test:** generate, validate, explain, and regression-test YAML policies from the CLI.
 
 ## Status
 
