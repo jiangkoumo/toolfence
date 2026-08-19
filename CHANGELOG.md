@@ -2,6 +2,15 @@
 
 All notable changes to ToolFence are documented here. The project follows Semantic Versioning.
 
+## [0.2.2] - 2026-08-19
+
+Recovery release for the 0.2.1 artifact after npm trusted publishing setup was completed.
+
+### Changed
+
+- Republished the 0.2.1 feature set as 0.2.2 after binding GitHub Actions to npm trusted publishing.
+- Retained the failed `v0.2.1` tag instead of moving or reusing it.
+
 ## [0.2.1] - 2026-08-19
 
 Usability and release-quality update on the v0.2 security baseline.
