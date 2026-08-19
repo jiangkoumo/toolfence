@@ -40,7 +40,7 @@ try {
     [
       "--input-type=module",
       "-e",
-      "import { initPolicy, PolicyEngine, startProxy } from 'toolfence-mcp'; if (![initPolicy, PolicyEngine, startProxy].every(Boolean)) process.exit(1)",
+      "import { initPolicy, PolicyEngine, readAudit, startProxy, summarizeAudit, tailAudit } from 'toolfence-mcp'; if (![initPolicy, PolicyEngine, readAudit, startProxy, summarizeAudit, tailAudit].every(Boolean)) process.exit(1)",
     ],
     { cwd: installDirectory },
   );

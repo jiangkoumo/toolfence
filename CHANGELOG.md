@@ -2,6 +2,30 @@
 
 All notable changes to ToolFence are documented here. The project follows Semantic Versioning.
 
+## [0.2.1] - 2026-08-19
+
+Usability and release-quality update on the v0.2 security baseline.
+
+### Added
+
+- Machine-readable approval queue output through `toolfence approvals --json`.
+- Non-interactive, approval-ID-scoped Broker decisions with explicit `allow-once`, `allow-session`, or `deny` values.
+- Audit `summary` and `tail` commands with text and JSON output.
+- Copy-ready local MCP configuration examples for Codex, Cursor, and Claude Desktop.
+- Enforced V8 coverage thresholds in the standard verification gate.
+- Fixed-seed fuzz/property tests for Normalizer totality and deny-rule precedence.
+
+### Changed
+
+- The public ESM API now exports audit reading, tailing, and summary helpers and their record types.
+- Vitest and its coverage provider were upgraded to 3.2.6.
+
+### Security
+
+- Scriptable approval output continues to exclude raw tool arguments and results.
+- Audit inspection rejects malformed records with a precise line number instead of silently skipping them.
+- The test-runner upgrade removes the development dependency vulnerability affecting Vitest versions before 3.2.6.
+
 ## [0.2.0] - 2026-08-17
 
 First stable open-source release.

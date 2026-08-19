@@ -1,6 +1,6 @@
 {
   "name": "toolfence-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local, fail-closed policy enforcement and human approval for MCP tool calls.",
   "repository": {
     "type": "git",
@@ -45,9 +45,10 @@
     "postbuild": "node --input-type=module -e \"import { chmodSync } from 'node:fs'; chmodSync('dist/cli.js', 0o755)\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:package": "node scripts/package-smoke.mjs",
     "release:check": "node scripts/release-check.mjs",
-    "verify": "npm run typecheck && npm test && npm run build && npm run test:package && npm pack --dry-run",
+    "verify": "npm run typecheck && npm run test:coverage && npm run build && npm run test:package && npm pack --dry-run",
     "prepublishOnly": "npm run release:check && npm run verify"
   },
   "engines": {
@@ -71,7 +72,8 @@
   "devDependencies": {
     "@modelcontextprotocol/server-filesystem": "^2026.7.10",
     "@types/node": "^22.19.1",
+    "@vitest/coverage-v8": "^3.2.6",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.6"
   }
 }

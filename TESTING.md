@@ -1,18 +1,18 @@
-# ToolFence v0.2 Test Strategy
+# ToolFence v0.2.x Test Strategy
 
 The release gate is risk-based: a passing happy path is insufficient unless denial, cancellation, timeout, disconnect, and malformed-input paths are also exercised.
 
-`npm run verify` also packs the built package, installs it into a clean temporary project, exercises the installed npm binary through its real symlink, validates a generated policy, and imports the public ESM API.
+`npm run verify` enforces V8 coverage thresholds, packs the built package, installs it into a clean temporary project, exercises the installed npm binary through its real symlink, validates a generated policy, and imports the public ESM API.
 
 `npm run release:check` is a separate publication gate because it intentionally fails until the final public GitHub repository URL is recorded. It also enforces version, changelog, package entry-point, Git cleanliness, tag, and dual-use disclosure consistency.
 
 ## Layers
 
-1. Unit tests cover normalization, canonical paths, strict policy validation, deterministic rule priority, HTTP host/method matching, and canonical Schema fingerprints.
-2. Component tests cover audit permissions, CLI argument boundaries, declarative policy commands, Broker authentication/protocol/queue behavior, session grants, and invalidation.
+1. Unit tests cover normalization, canonical paths, strict policy validation, deterministic rule priority, HTTP host/method matching, canonical Schema fingerprints, and fixed-seed fuzz/property invariants.
+2. Component tests cover audit permissions and inspection, CLI argument boundaries and output, declarative policy commands, Broker authentication/protocol/queue behavior, targeted non-interactive approvals, session grants, and invalidation.
 3. Proxy lifecycle tests cover approval, rejection, cancellation, timeout, upstream exit, result correlation, and Schema propagation.
 4. Real integration tests cover the official Filesystem MCP Server plus repeatable Shell, HTTP, and Git MCP fixtures.
-5. Packaging and dependency gates cover typecheck, build, executable CLI mode, package contents, and production dependency audit.
+5. Coverage, packaging, and dependency gates cover enforced line/branch/function thresholds, typecheck, build, executable CLI mode, package contents, and production dependency audit.
 
 ## Security cases
 
@@ -35,10 +35,7 @@ CI runs on macOS and Linux with Node.js 20, 22, and 24. Every cell runs:
 
 ```bash
 npm ci
-npm run typecheck
-npm test
-npm run build
-npm pack --dry-run
+npm run verify
 npm audit --omit=dev
 ```
 

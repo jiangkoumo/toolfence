@@ -1,4 +1,4 @@
-# ToolFence v0.2.0 Review Record
+# ToolFence v0.2.1 Review Record
 
 ## Review gates
 
@@ -7,19 +7,22 @@
 - Local IPC: authentication is mandatory; protocol version is checked; pending requests are owner-scoped; disconnect removes pending approvals; raw arguments are excluded.
 - Filesystem safety: symlink-aware canonicalization precedes policy matching; mixed resources use all/any semantics appropriate to allow/deny.
 - Data minimization: Broker and audit payloads contain normalized metadata only; upstream result bodies are represented by SHA-256.
+- Operational CLI: JSON approval snapshots contain only the Broker's privacy-safe request shape; targeted decisions require an exact pending approval ID and an explicit bounded decision value.
+- Audit inspection: summaries and tails are read-only, malformed JSONL fails with a line number, and no new audit data is created.
 - Failure behavior: policy, YAML, Schema, audit, Broker, Socket, and upstream startup errors are summarized without default stacks and fail closed.
-- Packaging: executable CLI, example policy, README, development manual, test plan, and review record are included.
+- Packaging: executable CLI, public audit helpers, example policy, README, development manual, test plan, and review record are included.
 
 ## Acceptance evidence
 
-Verified on 2026-08-17:
+Verified on 2026-08-19:
 
-- `npm run verify`: passed (typecheck, 51 tests, build, clean-install package smoke, and package dry run).
+- `npm run verify`: passed (typecheck, 60 tests, enforced coverage, build, clean-install package smoke, and package dry run).
+- V8 coverage passed at 78.87% statements/lines, 76.23% branches, and 88.65% functions.
 - Real integrations: official Filesystem MCP Server plus Shell, HTTP, and Git fixtures passed.
-- macOS runtime matrix: Node.js 20.20.2, 22.23.2, and 24.19.0 all passed the final clean-install package smoke; the 51-test suite, typecheck, and build passed on the active runtime.
+- The active macOS runtime passed the 60-test suite, typecheck, build, and clean-install package smoke; CI retains macOS/Linux coverage for Node.js 20, 22, and 24.
 - Package inspection: 38 intended files, including executable CLI, public TypeScript declarations, and dual-use disclosure.
-- CLI smoke tests: version succeeded; a missing policy returned one actionable line with no stack.
-- `npm audit --omit=dev`: zero production vulnerabilities.
+- CLI tests: audit summary/tail JSON output and a real non-interactive Broker approval both passed; version and installed binary smoke tests succeeded.
+- `npm audit` and `npm audit --omit=dev`: zero vulnerabilities.
 - CI workflow: macOS/Linux × Node.js 20/22/24 is configured; Linux cells run when the repository is pushed to CI.
 
 Review findings fixed before sign-off:
@@ -33,5 +36,11 @@ Review findings fixed before sign-off:
 - Made package metadata the CLI version source of truth and exposed the documented library entry point.
 - Fixed installed npm binaries silently exiting when invoked through the package-manager symlink, and added a clean-install tarball smoke gate.
 - Added npm dual-use metadata and a permanent disclosure describing process launching, mediated capabilities, intended use, and security boundaries.
+- Added machine-readable approval listing without expanding the Broker payload or exposing raw arguments.
+- Required exact approval IDs for non-interactive decisions and verified the path against a live authenticated Broker.
+- Added strict audit record parsing, deterministic summaries, bounded tailing, and public audit helper types.
+- Added coverage thresholds to the standard verification gate.
+- Added fixed-seed fuzz/property tests covering arbitrary JSON-shaped Normalizer inputs and randomized deny-rule ordering.
+- Upgraded Vitest and its coverage provider to 3.2.6, removing the vulnerable pre-3.2.6 development dependency.
 
-Status: passed local implementation, security, test, audit, package, and initial remote CI review. The final CI workflow includes the clean-install package smoke; npm account bootstrap and trusted-publisher configuration remain pre-publication gates.
+Status: passed local implementation, security, coverage, dependency audit, package, and release-preflight review. The release preflight reports only the expected dirty-worktree condition until these v0.2.1 changes are committed; the final CI matrix and trusted-publisher workflow remain publication gates.

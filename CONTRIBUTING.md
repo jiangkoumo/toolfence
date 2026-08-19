@@ -11,7 +11,7 @@ npm ci
 npm run verify
 ```
 
-`verify` runs the TypeScript checker, complete test suite, production build, a clean tarball installation smoke test, and package dry run. Before opening a pull request, also run:
+`verify` runs the TypeScript checker, complete test suite with enforced coverage thresholds, production build, a clean tarball installation smoke test, and package dry run. Before opening a pull request, also run:
 
 ```bash
 npm audit --omit=dev

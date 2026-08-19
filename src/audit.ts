@@ -1,8 +1,8 @@
-import { appendFileSync, chmodSync, closeSync, mkdirSync, openSync } from "node:fs";
+import { appendFileSync, chmodSync, closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type { Decision, JsonRpcId, NormalizedAction } from "./types.js";
+import { operations, type Decision, type JsonRpcId, type NormalizedAction } from "./types.js";
 
-type AuditEvent =
+export type AuditEvent =
   | {
       event: "decision";
       requestId: JsonRpcId;
@@ -18,6 +18,132 @@ type AuditEvent =
       resultHash: string;
       error: boolean;
     };
+
+export type AuditRecord = AuditEvent & { timestamp: string };
+
+export interface AuditSummary {
+  events: number;
+  decisions: {
+    total: number;
+    allow: number;
+    ask: number;
+    deny: number;
+  };
+  results: {
+    total: number;
+    errors: number;
+  };
+  operations: Record<string, number>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isRequestId(value: unknown): value is JsonRpcId {
+  return value === null || typeof value === "string" || typeof value === "number";
+}
+
+function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
+  let value: unknown;
+  try {
+    value = JSON.parse(line);
+  } catch {
+    throw new Error(`Invalid audit JSON on line ${lineNumber}`);
+  }
+  if (!isRecord(value) || typeof value.timestamp !== "string" || !Number.isFinite(Date.parse(value.timestamp))) {
+    throw new Error(`Invalid audit record on line ${lineNumber}`);
+  }
+  if (value.event === "decision") {
+    if (!isRecord(value.action) || !isRecord(value.decision)) {
+      throw new Error(`Invalid decision audit record on line ${lineNumber}`);
+    }
+    const effect = value.decision.effect;
+    if (
+      !isRequestId(value.requestId) ||
+      !operations.includes(value.action.operation as NormalizedAction["operation"]) ||
+      !Array.isArray(value.action.resources) ||
+      !value.action.resources.every((resource) => typeof resource === "string") ||
+      typeof value.action.server !== "string" ||
+      typeof value.action.tool !== "string" ||
+      (value.action.executable !== undefined && typeof value.action.executable !== "string") ||
+      (effect !== "allow" && effect !== "ask" && effect !== "deny") ||
+      typeof value.decision.reason !== "string" ||
+      (value.decision.ruleId !== undefined && typeof value.decision.ruleId !== "string")
+    ) {
+      throw new Error(`Invalid decision audit record on line ${lineNumber}`);
+    }
+    return {
+      timestamp: value.timestamp,
+      event: "decision",
+      requestId: value.requestId,
+      action: {
+        operation: value.action.operation as NormalizedAction["operation"],
+        resources: value.action.resources as string[],
+        server: value.action.server,
+        tool: value.action.tool,
+        executable: value.action.executable as string | undefined,
+      },
+      decision: {
+        effect,
+        reason: value.decision.reason,
+        ruleId: value.decision.ruleId as string | undefined,
+      },
+    };
+  }
+  if (value.event === "result") {
+    if (!isRequestId(value.requestId) || typeof value.resultHash !== "string" || typeof value.error !== "boolean") {
+      throw new Error(`Invalid result audit record on line ${lineNumber}`);
+    }
+    return {
+      timestamp: value.timestamp,
+      event: "result",
+      requestId: value.requestId,
+      resultHash: value.resultHash,
+      error: value.error,
+    };
+  }
+  throw new Error(`Unknown audit event on line ${lineNumber}`);
+}
+
+export function readAudit(filePath: string): AuditRecord[] {
+  const content = readFileSync(resolve(filePath), "utf8");
+  return content
+    .split(/\r?\n/)
+    .map((line, index) => ({ line, lineNumber: index + 1 }))
+    .filter(({ line }) => line.trim().length > 0)
+    .map(({ line, lineNumber }) => parseAuditRecord(line, lineNumber));
+}
+
+export function tailAudit(records: AuditRecord[], limit = 20): AuditRecord[] {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10_000) {
+    throw new Error("Audit tail limit must be between 1 and 10000");
+  }
+  return records.slice(-limit);
+}
+
+export function summarizeAudit(records: AuditRecord[]): AuditSummary {
+  const summary: AuditSummary = {
+    events: records.length,
+    decisions: { total: 0, allow: 0, ask: 0, deny: 0 },
+    results: { total: 0, errors: 0 },
+    operations: {},
+  };
+  for (const record of records) {
+    if (record.event === "decision") {
+      summary.decisions.total += 1;
+      summary.decisions[record.decision.effect] += 1;
+      summary.operations[record.action.operation] = (summary.operations[record.action.operation] ?? 0) + 1;
+    } else {
+      summary.results.total += 1;
+      if (record.error) summary.results.errors += 1;
+    }
+  }
+  summary.operations = Object.fromEntries(
+    Object.entries(summary.operations).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  return summary;
+}
 
 export class AuditLogger {
   readonly path: string;

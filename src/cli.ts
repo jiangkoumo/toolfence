@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { basename, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { TtyApprovalRequester } from "./approval.js";
-import { AuditLogger } from "./audit.js";
+import { AuditLogger, readAudit, summarizeAudit, tailAudit, type AuditSummary } from "./audit.js";
 import {
   BrokerApprovalRequester,
   brokerStatus,
@@ -15,6 +15,7 @@ import {
   resolveApproval,
   startBroker,
   type BrokerDecision,
+  type BrokerPaths,
 } from "./broker.js";
 import { initPolicy, loadPolicy } from "./config.js";
 import { canonicalizePath } from "./paths.js";
@@ -37,11 +38,20 @@ export interface WrapOptions {
   args: string[];
 }
 
+export interface ApprovalOptions {
+  command: "approvals";
+  json: boolean;
+  approvalId?: string;
+  decision?: BrokerDecision;
+}
+
 export type CliOptions =
   | WrapOptions
   | { command: "broker" }
   | { command: "status" }
-  | { command: "approvals" }
+  | ApprovalOptions
+  | { command: "audit-summary"; audit: string; json: boolean }
+  | { command: "audit-tail"; audit: string; json: boolean; lines: number }
   | { command: "policy-init"; policy: string }
   | { command: "policy-check"; policy: string }
   | { command: "policy-explain"; policy: string; action: string; workspace: string }
@@ -54,7 +64,10 @@ Usage:
   toolfence wrap --policy <file> [options] -- <command> [args...]
   toolfence broker
   toolfence status
-  toolfence approvals
+  toolfence approvals [--json]
+  toolfence approvals --id <approval-id> --decision <allow-once|allow-session|deny>
+  toolfence audit summary [--audit <file>] [--json]
+  toolfence audit tail [--audit <file>] [--lines <count>] [--json]
   toolfence policy init [--policy <file>]
   toolfence policy check --policy <file>
   toolfence policy explain --policy <file> --action <file> [--workspace <path>]
@@ -66,6 +79,17 @@ Wrap options:
   --workspace <path>    Working directory and relative-path root (default: cwd)
   --audit <file>        JSONL audit path (default: .toolfence/audit.jsonl)
   --approval <mode>     broker (default) or tty
+
+Approval options:
+  --json                Print the privacy-safe pending queue as JSON
+  --id <approval-id>    Resolve exactly one pending approval
+  --decision <value>    allow-once, allow-session, or deny
+
+Audit options:
+  --audit <file>        JSONL audit path (default: .toolfence/audit.jsonl)
+  --lines <count>       Tail record count, 1-10000 (default: 20)
+  --json                Print summary or tail output as JSON
+
   --help                Show this help
   --version             Show the version
 `;
@@ -83,6 +107,12 @@ function optionMap(args: string[]): Map<string, string> {
   return options;
 }
 
+function takeBooleanFlag(args: string[], flag: string): { present: boolean; args: string[] } {
+  const matches = args.filter((argument) => argument === flag).length;
+  if (matches > 1) throw new Error(`Duplicate option: ${flag}`);
+  return { present: matches === 1, args: args.filter((argument) => argument !== flag) };
+}
+
 export function parseCli(argv: string[]): CliOptions | "help" | "version" {
   const separator = argv.indexOf("--");
   const toolFenceArgs = separator === -1 ? argv : argv.slice(0, separator);
@@ -90,9 +120,56 @@ export function parseCli(argv: string[]): CliOptions | "help" | "version" {
   if (toolFenceArgs.includes("--version") || toolFenceArgs.includes("-v")) return "version";
 
   const command = argv[0];
-  if (command === "broker" || command === "status" || command === "approvals") {
+  if (command === "broker" || command === "status") {
     if (argv.length !== 1) throw new Error(`${command} does not accept arguments`);
     return { command };
+  }
+  if (command === "approvals") {
+    const jsonFlag = takeBooleanFlag(argv.slice(1), "--json");
+    const options = optionMap(jsonFlag.args);
+    for (const flag of options.keys()) {
+      if (flag !== "--id" && flag !== "--decision") throw new Error(`Unknown option for approvals: ${flag}`);
+    }
+    const approvalId = options.get("--id");
+    const rawDecision = options.get("--decision");
+    if ((approvalId === undefined) !== (rawDecision === undefined)) {
+      throw new Error("--id and --decision must be used together");
+    }
+    if (
+      rawDecision !== undefined &&
+      rawDecision !== "allow-once" &&
+      rawDecision !== "allow-session" &&
+      rawDecision !== "deny"
+    ) {
+      throw new Error("--decision must be allow-once, allow-session, or deny");
+    }
+    if (jsonFlag.present && approvalId) throw new Error("--json cannot be combined with --id");
+    return {
+      command: "approvals",
+      json: jsonFlag.present,
+      approvalId,
+      decision: rawDecision as BrokerDecision | undefined,
+    };
+  }
+  if (command === "audit") {
+    const subcommand = argv[1];
+    if (subcommand !== "summary" && subcommand !== "tail") {
+      throw new Error("Expected audit subcommand: summary or tail");
+    }
+    const jsonFlag = takeBooleanFlag(argv.slice(2), "--json");
+    const options = optionMap(jsonFlag.args);
+    const allowed = subcommand === "tail" ? new Set(["--audit", "--lines"]) : new Set(["--audit"]);
+    for (const flag of options.keys()) {
+      if (!allowed.has(flag)) throw new Error(`Unknown option for audit ${subcommand}: ${flag}`);
+    }
+    const audit = resolve(options.get("--audit") ?? resolve(process.cwd(), ".toolfence/audit.jsonl"));
+    if (subcommand === "summary") return { command: "audit-summary", audit, json: jsonFlag.present };
+    const rawLines = options.get("--lines") ?? "20";
+    const lines = Number(rawLines);
+    if (!Number.isSafeInteger(lines) || lines < 1 || lines > 10_000) {
+      throw new Error("--lines must be between 1 and 10000");
+    }
+    return { command: "audit-tail", audit, json: jsonFlag.present, lines };
   }
   if (command === "policy") {
     const subcommand = argv[1];
@@ -167,34 +244,61 @@ async function runBroker(): Promise<void> {
   });
 }
 
-async function runApprovals(): Promise<void> {
-  const { socket, requests } = await listApprovals();
-  if (requests.length === 0) {
-    process.stdout.write("No pending approvals.\n");
-    socket.end();
-    return;
-  }
-  const terminal = createInterface({ input, output });
+export async function runApprovals(options: ApprovalOptions, paths?: BrokerPaths): Promise<void> {
+  const { socket, requests } = await listApprovals(paths);
   try {
-    for (const request of requests) {
-      const details = request.action.resources.length
-        ? request.action.resources.join(", ")
-        : request.action.command ?? request.action.network?.url ?? "no recognized resource";
-      const answer = await terminal.question(
-        `[${request.approvalId}] ${request.action.operation} via ${request.action.server}/${request.action.tool}\n  ${details}\nAllow once [y], session [s], or deny [N]? `,
-      );
-      const decision: BrokerDecision =
-        answer.trim().toLowerCase() === "y"
-          ? "allow-once"
-          : answer.trim().toLowerCase() === "s"
-            ? "allow-session"
-            : "deny";
-      resolveApproval(socket, request.approvalId, decision);
+    if (options.json) {
+      process.stdout.write(`${JSON.stringify(requests)}\n`);
+      return;
+    }
+    if (options.approvalId && options.decision) {
+      if (!requests.some((request) => request.approvalId === options.approvalId)) {
+        throw new Error(`Approval not found: ${options.approvalId}`);
+      }
+      resolveApproval(socket, options.approvalId, options.decision);
+      process.stdout.write(`Resolved ${options.approvalId} as ${options.decision}.\n`);
+      return;
+    }
+    if (requests.length === 0) {
+      process.stdout.write("No pending approvals.\n");
+      return;
+    }
+    const terminal = createInterface({ input, output });
+    try {
+      for (const request of requests) {
+        const details = request.action.resources.length
+          ? request.action.resources.join(", ")
+          : request.action.command ?? request.action.network?.url ?? "no recognized resource";
+        const answer = await terminal.question(
+          `[${request.approvalId}] ${request.action.operation} via ${request.action.server}/${request.action.tool}\n  ${details}\nAllow once [y], session [s], or deny [N]? `,
+        );
+        const decision: BrokerDecision =
+          answer.trim().toLowerCase() === "y"
+            ? "allow-once"
+            : answer.trim().toLowerCase() === "s"
+              ? "allow-session"
+              : "deny";
+        resolveApproval(socket, request.approvalId, decision);
+      }
+    } finally {
+      terminal.close();
     }
   } finally {
-    terminal.close();
     socket.end();
   }
+}
+
+function formatAuditSummary(summary: AuditSummary): string {
+  const operations = Object.entries(summary.operations)
+    .map(([operation, count]) => `  ${operation}: ${count}`)
+    .join("\n");
+  return [
+    `Events: ${summary.events}`,
+    `Decisions: ${summary.decisions.total} (allow ${summary.decisions.allow}, ask ${summary.decisions.ask}, deny ${summary.decisions.deny})`,
+    `Results: ${summary.results.total} (errors ${summary.results.errors})`,
+    "Operations:",
+    operations || "  none",
+  ].join("\n");
 }
 
 async function runWrap(options: WrapOptions): Promise<void> {
@@ -244,7 +348,19 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
       process.stdout.write(`Broker ready: protocol ${status.protocolVersion}, socket mode ${status.socketMode.toString(8)}\n`);
       return;
     }
-    if (options.command === "approvals") return await runApprovals();
+    if (options.command === "approvals") return await runApprovals(options);
+    if (options.command === "audit-summary") {
+      const summary = summarizeAudit(readAudit(options.audit));
+      process.stdout.write(options.json ? `${JSON.stringify(summary)}\n` : `${formatAuditSummary(summary)}\n`);
+      return;
+    }
+    if (options.command === "audit-tail") {
+      const records = tailAudit(readAudit(options.audit), options.lines);
+      process.stdout.write(options.json
+        ? `${JSON.stringify(records)}\n`
+        : records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : ""));
+      return;
+    }
     if (options.command === "policy-init") {
       process.stdout.write(`Created policy: ${initPolicy(options.policy)}\n`);
       return;

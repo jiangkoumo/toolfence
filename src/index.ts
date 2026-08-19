@@ -1,6 +1,7 @@
 export { normalizeToolCall } from "./adapters.js";
 export type { ApprovalContext, ApprovalRequester } from "./approval.js";
-export { AuditLogger } from "./audit.js";
+export { AuditLogger, readAudit, summarizeAudit, tailAudit } from "./audit.js";
+export type { AuditEvent, AuditRecord, AuditSummary } from "./audit.js";
 export {
   BrokerApprovalRequester,
   brokerProtocolVersion,

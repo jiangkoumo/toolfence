@@ -23,7 +23,7 @@ DENY   Run sudo rm -rf ...
 
 ## Status
 
-Version 0.2.0 is the first stable open-source release. It includes cancellable approvals through a local Broker, conservative Filesystem/Shell/Git/HTTP adapters, policy creation and development commands, Schema-bound session approvals, and real MCP integration tests.
+Version 0.2.1 adds scriptable approvals, audit inspection commands, copy-ready MCP Host configuration examples, and enforced test coverage on top of the stable v0.2 security baseline.
 
 ToolFence is **not a sandbox for a malicious MCP server process**: the upstream process still runs with the current user's operating-system permissions.
 
@@ -64,7 +64,7 @@ toolfence wrap \
   -- npx -y @modelcontextprotocol/server-filesystem "$PWD"
 ```
 
-An MCP client configuration looks like this:
+Claude Desktop local development and Cursor both accept this stdio server shape. Put it in Claude Desktop's local MCP configuration or in `.cursor/mcp.json` for a project-scoped Cursor setup:
 
 ```json
 {
@@ -84,6 +84,26 @@ An MCP client configuration looks like this:
 }
 ```
 
+Codex uses TOML in `~/.codex/config.toml` or a trusted project's `.codex/config.toml`:
+
+```toml
+[mcp_servers.filesystem]
+command = "toolfence"
+args = [
+  "wrap",
+  "--policy", "/absolute/path/policy.yaml",
+  "--server", "filesystem",
+  "--workspace", "/absolute/path/project",
+  "--",
+  "npx", "-y", "@modelcontextprotocol/server-filesystem", "/absolute/path/project",
+]
+cwd = "/absolute/path/project"
+```
+
+Use absolute paths because MCP Hosts may start local servers from a different working directory. Restart or reload the Host after changing its MCP configuration.
+
+Configuration references: [Codex](https://developers.openai.com/codex/config-file/config-reference), [Cursor](https://docs.cursor.com/context/model-context-protocol), and [Claude Desktop](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop).
+
 ToolFence reserves stdout for MCP JSON-RPC messages. Diagnostics and upstream stderr stay on stderr. Start the per-user Broker and approval terminal in separate terminals:
 
 ```bash
@@ -92,6 +112,15 @@ toolfence approvals
 ```
 
 `wrap` uses the Broker by default. If it is missing, incompatible, unauthenticated, disconnected, or times out, an `ask` decision fails closed. Use `--approval tty` only when direct `/dev/tty` approval is desired. `toolfence status` verifies Broker connectivity, protocol version, and Socket permissions.
+
+For scripts or an external approval UI, list the privacy-safe queue as JSON or resolve one known approval ID without a prompt:
+
+```bash
+toolfence approvals --json
+toolfence approvals --id <approval-id> --decision allow-once
+toolfence approvals --id <approval-id> --decision allow-session
+toolfence approvals --id <approval-id> --decision deny
+```
 
 ## Policy
 
@@ -156,6 +185,17 @@ The default audit file is `.toolfence/audit.jsonl` under the workspace. It recor
 
 Use `--audit /path/to/audit.jsonl` to select a different path.
 
+Inspect the default or a selected audit log without storing additional data:
+
+```bash
+toolfence audit summary
+toolfence audit summary --audit /path/to/audit.jsonl --json
+toolfence audit tail --lines 20
+toolfence audit tail --audit /path/to/audit.jsonl --lines 50 --json
+```
+
+`summary` reports decision effects, result errors, and operation counts. `tail` returns the newest validated records using only the documented privacy-safe JSONL fields.
+
 ## Security boundary
 
 ToolFence v0.2 reduces accidental or prompt-injected tool misuse when the tool call crosses this proxy. It does not prevent the upstream server process from directly reading files, environment variables, or the network. Process isolation, environment filtering, and network controls belong to a later sandbox phase.
@@ -175,6 +215,7 @@ The architecture, threat model, security invariants, and v0.2 implementation pla
 ```bash
 npm run typecheck
 npm test
+npm run test:coverage
 npm run build
 npm pack --dry-run
 npm audit --omit=dev
