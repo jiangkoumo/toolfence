@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a focused improvement or use case
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Describe the user problem before proposing an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Desired behavior
+      description: What observable behavior would solve the problem?
+    validations:
+      required: true
+  - type: dropdown
+    id: trust-boundary
+    attributes:
+      label: Trust-boundary impact
+      options:
+        - No known security-boundary change
+        - Changes policy matching or decisions
+        - Changes approval behavior
+        - Changes audit data
+        - Changes process or network isolation
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: I read the current ROADMAP and security boundary.
+          required: true

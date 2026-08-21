@@ -1,0 +1,70 @@
+name: Bug report
+description: Report reproducible incorrect behavior in ToolFence
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, approval tokens, raw tool arguments, sensitive policy paths, or raw upstream results. Report suspected vulnerabilities through the private security advisory link instead.
+  - type: input
+    id: version
+    attributes:
+      label: ToolFence version
+      placeholder: "0.2.2"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Node.js version, and MCP host
+      placeholder: "macOS 15, Node.js 22, Codex"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Policy evaluation
+        - Proxy or JSON-RPC lifecycle
+        - Broker or approvals
+        - Audit log
+        - CLI or packaging
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Use sanitized paths, commands, and arguments.
+      placeholder: |
+        1. Create this minimal policy...
+        2. Run this sanitized command...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, credentials, approval tokens, and sensitive raw arguments/results.
+          required: true
+        - label: I searched existing issues for the same behavior.
+          required: true

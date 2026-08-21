@@ -1,0 +1,28 @@
+title: "[Idea] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this category to explore an idea before it becomes a scoped feature request. Security-boundary changes need an explicit threat-model discussion.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should ToolFence solve?
+      description: Include the MCP host, server, and user workflow when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Possible approach
+      description: Optional implementation ideas or alternatives.
+  - type: dropdown
+    id: security
+    attributes:
+      label: Does this affect the trust boundary?
+      options:
+        - No
+        - Yes
+        - Unsure
+    validations:
+      required: true

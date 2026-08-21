@@ -1,0 +1,24 @@
+title: "[Show and tell] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share a sanitized ToolFence setup, policy pattern, integration, or lesson learned. Never post credentials, approval tokens, sensitive paths, raw arguments, or raw upstream results.
+  - type: textarea
+    id: use-case
+    attributes:
+      label: What did you protect?
+      description: Describe the host, upstream MCP server, and risk in general terms.
+    validations:
+      required: true
+  - type: textarea
+    id: policy
+    attributes:
+      label: Sanitized policy or configuration
+      render: yaml
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What worked, and what was difficult?
+    validations:
+      required: true

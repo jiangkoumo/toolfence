@@ -1,60 +1,32 @@
 # ToolFence
 
 [![CI](https://github.com/jiangkoumo/toolfence/actions/workflows/ci.yml/badge.svg)](https://github.com/jiangkoumo/toolfence/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/toolfence-mcp)](https://www.npmjs.com/package/toolfence-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/toolfence-mcp)](https://www.npmjs.com/package/toolfence-mcp)
+[![license](https://img.shields.io/npm/l/toolfence-mcp)](LICENSE)
 
 **A local, fail-closed firewall for MCP tool calls.**
 
-ToolFence puts least-privilege policies and human approval between AI agents and stdio MCP servers. It allows safe operations, blocks dangerous ones, and asks before forwarding calls that need a human decision—without requiring code changes to the MCP client or server.
+ToolFence puts testable least-privilege policies and human approval between AI agents and stdio MCP servers. It allows safe operations, blocks dangerous ones, and asks before forwarding calls that need a human decision—without code changes to the MCP host or upstream server.
 
-```text
-ALLOW  Read ./src/index.ts
-DENY   Read ~/.ssh/id_rsa
-ASK    Run npm install
-DENY   Run sudo rm -rf ...
-```
+![ToolFence end-to-end MCP demo](docs/assets/demo.gif)
 
-## Why ToolFence
+The animation records a reproducible end-to-end run with an isolated Broker, the ToolFence proxy, and the official Filesystem MCP Server. The approval uses the real queue and `allow-once` CLI. [Run it or regenerate the GIF](docs/demo.md).
 
-- **Semantic policies:** normalize common Filesystem, Shell, Git, and HTTP tool calls into operations such as `fs.read`, `shell.exec`, `git.write`, and `net.request`, then match paths, exact command arguments, hosts, and HTTP methods.
-- **Deterministic enforcement:** `deny` overrides other matches, multi-resource requests are evaluated as a unit, and unknown or ambiguous actions fail closed.
-- **Human approval:** use an authenticated local Broker for one-time or session decisions; session approvals are bound to the tool Schema and are invalidated when that Schema changes.
-- **Privacy-conscious auditing:** record tool identity, affected resources, policy decisions, and result hashes without storing raw arguments or results.
-- **Policies you can test:** generate, validate, explain, and regression-test YAML policies from the CLI.
+![ToolFence architecture](docs/assets/architecture.svg)
 
-## Status
+## Try it in three minutes
 
-Version 0.2.1 adds scriptable approvals, audit inspection commands, copy-ready MCP Host configuration examples, and enforced test coverage on top of the stable v0.2 security baseline.
-
-ToolFence is **not a sandbox for a malicious MCP server process**: the upstream process still runs with the current user's operating-system permissions.
-
-Because ToolFence launches user-configured processes and mediates Shell, Git, and HTTP capabilities, the npm package is transparently declared as dual-use. See [DISCLOSURE](DISCLOSURE) for the intended legitimate use and security boundary.
-
-## Install
-
-The npm package name is `toolfence-mcp`; the command is `toolfence`.
+The npm package is `toolfence-mcp`; the installed command is `toolfence`.
 
 ```bash
 npm install -g toolfence-mcp
-```
-
-For local development:
-
-```bash
-npm install
-npm run build
-npm link
-```
-
-## Quick start
-
-Create a conservative starter policy, review it, then wrap any stdio MCP server:
-
-```bash
+cd /absolute/path/project
 toolfence policy init
 toolfence policy check --policy ./toolfence.yaml
 ```
 
-The generated file never replaces an existing policy. For a broader annotated example, see [`examples/policy.yaml`](examples/policy.yaml).
+Wrap a local Filesystem MCP server:
 
 ```bash
 toolfence wrap \
@@ -64,45 +36,43 @@ toolfence wrap \
   -- npx -y @modelcontextprotocol/server-filesystem "$PWD"
 ```
 
-Claude Desktop local development and Cursor both accept this stdio server shape. Put it in Claude Desktop's local MCP configuration or in `.cursor/mcp.json` for a project-scoped Cursor setup:
+The generated policy is conservative and never replaces an existing file. See the annotated [`examples/policy.yaml`](examples/policy.yaml).
 
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "toolfence",
-      "args": [
-        "wrap",
-        "--policy", "/absolute/path/policy.yaml",
-        "--server", "filesystem",
-        "--workspace", "/absolute/path/project",
-        "--",
-        "npx", "-y", "@modelcontextprotocol/server-filesystem", "/absolute/path/project"
-      ]
-    }
-  }
-}
-```
+Connect the wrapper to your MCP host:
 
-Codex uses TOML in `~/.codex/config.toml` or a trusted project's `.codex/config.toml`:
+| Host | Copy-ready guide |
+| --- | --- |
+| Codex | [`docs/codex.md`](docs/codex.md) |
+| Cursor | [`docs/cursor.md`](docs/cursor.md) |
+| Claude Desktop | [`docs/claude-desktop.md`](docs/claude-desktop.md) |
 
-```toml
-[mcp_servers.filesystem]
-command = "toolfence"
-args = [
-  "wrap",
-  "--policy", "/absolute/path/policy.yaml",
-  "--server", "filesystem",
-  "--workspace", "/absolute/path/project",
-  "--",
-  "npx", "-y", "@modelcontextprotocol/server-filesystem", "/absolute/path/project",
-]
-cwd = "/absolute/path/project"
-```
+## Why ToolFence
 
-Use absolute paths because MCP Hosts may start local servers from a different working directory. Restart or reload the Host after changing its MCP configuration.
+- **Semantic policies:** normalize common Filesystem, Shell, Git, and HTTP tool calls into operations such as `fs.read`, `shell.exec`, `git.write`, and `net.request`, then match paths, exact command arguments, hosts, and HTTP methods.
+- **Deterministic enforcement:** `deny` overrides other matches, multi-resource requests are evaluated as a unit, and unknown or ambiguous actions fail closed.
+- **Human approval:** use an authenticated local Broker for one-time or session decisions; session approvals are bound to the tool Schema and are invalidated when that Schema changes.
+- **Privacy-conscious auditing:** record tool identity, affected resources, policy decisions, and result hashes without storing raw arguments or results.
+- **Policies you can test:** generate, validate, explain, and regression-test YAML policies from the CLI.
 
-Configuration references: [Codex](https://developers.openai.com/codex/config-file/config-reference), [Cursor](https://docs.cursor.com/context/model-context-protocol), and [Claude Desktop](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop).
+## Where ToolFence fits
+
+| Layer | What it controls | What it does not control |
+| --- | --- | --- |
+| MCP host approvals | Host-specific user prompts and tool settings | A reusable policy shared across different hosts |
+| **ToolFence** | Normalized tool calls, deterministic YAML policy, Schema-bound approval, privacy-conscious audit | Direct actions taken by the upstream server process |
+| OS sandbox or container | Process, filesystem, environment, and network access | Semantic intent of an MCP tool call by itself |
+
+ToolFence is designed to complement host approvals and OS isolation. It is not a replacement for either.
+
+## Status
+
+Version 0.2.3 provides the stable v0.2 security baseline with scriptable approvals, audit inspection and diagnostic commands, copy-ready MCP Host configuration, enforced test coverage, and npm trusted publishing provenance.
+
+ToolFence is **not a sandbox for a malicious MCP server process**: the upstream process still runs with the current user's operating-system permissions.
+
+Because ToolFence launches user-configured processes and mediates Shell, Git, and HTTP capabilities, the npm package is transparently declared as dual-use. See [DISCLOSURE](DISCLOSURE) for the intended legitimate use and security boundary.
+
+## Human approval
 
 ToolFence reserves stdout for MCP JSON-RPC messages. Diagnostics and upstream stderr stay on stderr. Start the per-user Broker and approval terminal in separate terminals:
 
@@ -112,6 +82,17 @@ toolfence approvals
 ```
 
 `wrap` uses the Broker by default. If it is missing, incompatible, unauthenticated, disconnected, or times out, an `ask` decision fails closed. Use `--approval tty` only when direct `/dev/tty` approval is desired. `toolfence status` verifies Broker connectivity, protocol version, and Socket permissions.
+
+Diagnose a local setup before connecting it to an MCP host:
+
+```bash
+toolfence doctor --policy ./toolfence.yaml
+toolfence doctor --policy ./toolfence.yaml -- \
+  npx -y @modelcontextprotocol/server-filesystem "$PWD"
+toolfence doctor --policy ./toolfence.yaml --json
+```
+
+`doctor` checks the Node.js runtime, validates the selected Policy, authenticates a running Broker and verifies its private runtime permissions, and optionally starts the explicit command after `--` for a short startup probe. Warnings identify checks that were not requested or services that are not currently running; failed checks exit non-zero.
 
 For scripts or an external approval UI, list the privacy-safe queue as JSON or resolve one known approval ID without a prompt:
 
@@ -210,7 +191,7 @@ Additional current limitations:
 
 ## Development
 
-The architecture, threat model, security invariants, and v0.2 implementation plan are maintained in the [development guide](DEVELOPMENT.md).
+The architecture, threat model, security invariants, and v0.2 implementation plan are maintained in the [development guide](DEVELOPMENT.md). Current product priorities and good first contribution candidates are in the [roadmap](ROADMAP.md).
 
 ```bash
 npm run typecheck

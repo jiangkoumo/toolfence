@@ -1,6 +1,6 @@
 {
   "name": "toolfence-mcp",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Local, fail-closed policy enforcement and human approval for MCP tool calls.",
   "repository": {
     "type": "git",
@@ -28,7 +28,9 @@
   },
   "files": [
     "dist",
+    "docs",
     "examples",
+    "ROADMAP.md",
     "DEVELOPMENT.md",
     "TESTING.md",
     "REVIEW.md",
@@ -43,12 +45,16 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "postbuild": "node --input-type=module -e \"import { chmodSync } from 'node:fs'; chmodSync('dist/cli.js', 0o755)\"",
+    "demo": "npm run build --silent && npm run test:demo",
+    "demo:live": "npm run build --silent && node scripts/live-demo.mjs",
+    "demo:render": "npm run build --silent && node scripts/render-demo.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:demo": "node scripts/demo.mjs",
     "test:coverage": "vitest run --coverage",
     "test:package": "node scripts/package-smoke.mjs",
     "release:check": "node scripts/release-check.mjs",
-    "verify": "npm run typecheck && npm run test:coverage && npm run build && npm run test:package && npm pack --dry-run",
+    "verify": "npm run typecheck && npm run test:coverage && npm run build && npm run test:demo && npm run test:package && npm pack --dry-run",
     "prepublishOnly": "npm run release:check && npm run verify"
   },
   "engines": {

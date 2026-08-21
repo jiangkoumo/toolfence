@@ -18,6 +18,7 @@ import {
   type BrokerPaths,
 } from "./broker.js";
 import { initPolicy, loadPolicy } from "./config.js";
+import { diagnose, formatDoctorReport, type DoctorOptions } from "./doctor.js";
 import { canonicalizePath } from "./paths.js";
 import { PolicyEngine } from "./policy.js";
 import { checkPolicy, explainPolicy, testPolicy } from "./policy-tools.js";
@@ -49,6 +50,7 @@ export type CliOptions =
   | WrapOptions
   | { command: "broker" }
   | { command: "status" }
+  | (DoctorOptions & { command: "doctor"; json: boolean })
   | ApprovalOptions
   | { command: "audit-summary"; audit: string; json: boolean }
   | { command: "audit-tail"; audit: string; json: boolean; lines: number }
@@ -64,6 +66,7 @@ Usage:
   toolfence wrap --policy <file> [options] -- <command> [args...]
   toolfence broker
   toolfence status
+  toolfence doctor [--policy <file>] [--workspace <path>] [--json] [-- <command> [args...]]
   toolfence approvals [--json]
   toolfence approvals --id <approval-id> --decision <allow-once|allow-session|deny>
   toolfence audit summary [--audit <file>] [--json]
@@ -89,6 +92,11 @@ Audit options:
   --audit <file>        JSONL audit path (default: .toolfence/audit.jsonl)
   --lines <count>       Tail record count, 1-10000 (default: 20)
   --json                Print summary or tail output as JSON
+
+Doctor options:
+  --policy <file>       Validate a policy file
+  --workspace <path>    Working directory for the startup probe (default: cwd)
+  --json                Print the diagnostic report as JSON
 
   --help                Show this help
   --version             Show the version
@@ -123,6 +131,23 @@ export function parseCli(argv: string[]): CliOptions | "help" | "version" {
   if (command === "broker" || command === "status") {
     if (argv.length !== 1) throw new Error(`${command} does not accept arguments`);
     return { command };
+  }
+  if (command === "doctor") {
+    const jsonFlag = takeBooleanFlag(toolFenceArgs.slice(1), "--json");
+    const options = optionMap(jsonFlag.args);
+    for (const flag of options.keys()) {
+      if (flag !== "--policy" && flag !== "--workspace") throw new Error(`Unknown option for doctor: ${flag}`);
+    }
+    if (separator === argv.length - 1) throw new Error("Expected an upstream command after '--'");
+    const upstream = separator === -1 ? [] : argv.slice(separator + 1);
+    return {
+      command: "doctor",
+      json: jsonFlag.present,
+      policy: options.has("--policy") ? resolve(options.get("--policy")!) : undefined,
+      workspace: canonicalizePath(options.get("--workspace") ?? process.cwd(), process.cwd()),
+      upstreamCommand: upstream[0],
+      args: upstream.slice(1),
+    };
   }
   if (command === "approvals") {
     const jsonFlag = takeBooleanFlag(argv.slice(1), "--json");
@@ -208,7 +233,7 @@ export function parseCli(argv: string[]): CliOptions | "help" | "version" {
     }
     throw new Error("Unreachable policy subcommand");
   }
-  if (command !== "wrap") throw new Error("Expected wrap, broker, status, approvals, or policy");
+  if (command !== "wrap") throw new Error("Expected wrap, broker, status, doctor, approvals, audit, or policy");
   if (separator === -1 || separator === argv.length - 1) {
     throw new Error("Expected an upstream command after '--'");
   }
@@ -346,6 +371,12 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
     if (options.command === "status") {
       const status = await brokerStatus();
       process.stdout.write(`Broker ready: protocol ${status.protocolVersion}, socket mode ${status.socketMode.toString(8)}\n`);
+      return;
+    }
+    if (options.command === "doctor") {
+      const report = await diagnose(options);
+      process.stdout.write(options.json ? `${JSON.stringify(report)}\n` : `${formatDoctorReport(report)}\n`);
+      if (!report.ok) process.exitCode = 1;
       return;
     }
     if (options.command === "approvals") return await runApprovals(options);
