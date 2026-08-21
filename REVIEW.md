@@ -1,4 +1,4 @@
-# ToolFence v0.2.1 Review Record
+# ToolFence v0.2.3 Review Record
 
 ## Review gates
 
@@ -9,19 +9,20 @@
 - Data minimization: Broker and audit payloads contain normalized metadata only; upstream result bodies are represented by SHA-256.
 - Operational CLI: JSON approval snapshots contain only the Broker's privacy-safe request shape; targeted decisions require an exact pending approval ID and an explicit bounded decision value.
 - Audit inspection: summaries and tails are read-only, malformed JSONL fails with a line number, and no new audit data is created.
+- Diagnostics: Doctor checks do not expose Policy contents or upstream output; an explicit startup probe uses argv without a shell and terminates the probed process group.
 - Failure behavior: policy, YAML, Schema, audit, Broker, Socket, and upstream startup errors are summarized without default stacks and fail closed.
 - Packaging: executable CLI, public audit helpers, example policy, README, development manual, test plan, and review record are included.
 
 ## Acceptance evidence
 
-Verified on 2026-08-19:
+Verified locally on 2026-08-21:
 
-- `npm run verify`: passed (typecheck, 60 tests, enforced coverage, build, clean-install package smoke, and package dry run).
-- V8 coverage passed at 78.87% statements/lines, 76.23% branches, and 88.65% functions.
+- `npm run verify`: passed (typecheck, 65 tests, enforced coverage, end-to-end demo, build, clean-install package smoke, and package dry run).
+- V8 coverage passed at 80.36% statements/lines, 77.03% branches, and 90.38% functions.
 - Real integrations: official Filesystem MCP Server plus Shell, HTTP, and Git fixtures passed.
-- The active macOS runtime passed the 60-test suite, typecheck, build, and clean-install package smoke; CI retains macOS/Linux coverage for Node.js 20, 22, and 24.
-- Package inspection: 38 intended files, including executable CLI, public TypeScript declarations, and dual-use disclosure.
-- CLI tests: audit summary/tail JSON output and a real non-interactive Broker approval both passed; version and installed binary smoke tests succeeded.
+- The active macOS runtime passed the 65-test suite, typecheck, build, end-to-end demo, and clean-install package smoke; CI retains macOS/Linux coverage for Node.js 20, 22, and 24.
+- Package inspection: 47 intended files, including executable CLI, public TypeScript declarations, host guides, visual assets, and dual-use disclosure.
+- CLI tests: audit summary/tail JSON output, a real non-interactive Broker approval, and Doctor Policy/Broker/Socket/upstream checks passed; version and installed binary smoke tests succeeded.
 - `npm audit` and `npm audit --omit=dev`: zero vulnerabilities.
 - CI workflow: macOS/Linux × Node.js 20/22/24 is configured; Linux cells run when the repository is pushed to CI.
 
@@ -42,5 +43,7 @@ Review findings fixed before sign-off:
 - Added coverage thresholds to the standard verification gate.
 - Added fixed-seed fuzz/property tests covering arbitrary JSON-shaped Normalizer inputs and randomized deny-rule ordering.
 - Upgraded Vitest and its coverage provider to 3.2.6, removing the vulnerable pre-3.2.6 development dependency.
+- Added reproducible documentation, host setup guides, issue/discussion templates, and an installed-package demo gate.
+- Added text and JSON Doctor reports with explicit upstream startup probing and POSIX process-group cleanup.
 
-Status: passed local implementation, security, coverage, dependency audit, package, and release-preflight review. The release preflight reports only the expected dirty-worktree condition until these v0.2.1 changes are committed; the final CI matrix and trusted-publisher workflow remain publication gates.
+Status: passed local implementation, security, coverage, dependency audit, package, and patch review. The clean-tree release check, final CI matrix, and trusted-publisher workflow remain publication gates.

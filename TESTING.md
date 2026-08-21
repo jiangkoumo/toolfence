@@ -9,7 +9,7 @@ The release gate is risk-based: a passing happy path is insufficient unless deni
 ## Layers
 
 1. Unit tests cover normalization, canonical paths, strict policy validation, deterministic rule priority, HTTP host/method matching, canonical Schema fingerprints, and fixed-seed fuzz/property invariants.
-2. Component tests cover audit permissions and inspection, CLI argument boundaries and output, declarative policy commands, Broker authentication/protocol/queue behavior, targeted non-interactive approvals, session grants, and invalidation.
+2. Component tests cover audit permissions and inspection, CLI argument boundaries and output, diagnostic Policy/Broker/upstream checks, declarative policy commands, Broker authentication/protocol/queue behavior, targeted non-interactive approvals, session grants, and invalidation.
 3. Proxy lifecycle tests cover approval, rejection, cancellation, timeout, upstream exit, result correlation, and Schema propagation.
 4. Real integration tests cover the official Filesystem MCP Server plus repeatable Shell, HTTP, and Git MCP fixtures.
 5. Coverage, packaging, and dependency gates cover enforced line/branch/function thresholds, typecheck, build, executable CLI mode, package contents, and production dependency audit.
@@ -28,6 +28,7 @@ The release gate is risk-based: a passing happy path is insufficient unless deni
 - Session approval keys contain Server, Tool, operation, and Schema fingerprint.
 - Broker and audit records omit raw arguments and raw results.
 - Runtime directory, Socket, Token, and audit modes are checked on POSIX.
+- Doctor reports an unavailable optional Broker without weakening fail-closed proxy behavior and rejects insecure Broker permissions or a failed upstream startup probe.
 
 ## CI matrix
 

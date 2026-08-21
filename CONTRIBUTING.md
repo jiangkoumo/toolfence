@@ -29,6 +29,8 @@ Maintainers preparing a release must also run `npm run release:check`; it valida
 
 For architecture, invariants, and detailed test expectations, read [DEVELOPMENT.md](DEVELOPMENT.md) and [TESTING.md](TESTING.md).
 
+Small, well-scoped contributions are listed under [Good first contribution candidates](ROADMAP.md#good-first-contribution-candidates). Open a feature request before changing policy semantics or the trust boundary.
+
 ## Security reports
 
 Do not open a public issue for a suspected vulnerability. Follow [SECURITY.md](SECURITY.md).

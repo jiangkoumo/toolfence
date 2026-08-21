@@ -32,9 +32,20 @@ requireCondition(packageJson.bin?.toolfence === "dist/cli.js", "toolfence binary
 requireCondition(packageJson.exports?.["."]?.import === "./dist/index.js", "public ESM export is missing");
 requireCondition(packageJson.exports?.["."]?.types === "./dist/index.d.ts", "public type export is missing");
 
-for (const file of ["CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "README.md", "RELEASING.md", "SECURITY.md"]) {
+for (const file of ["CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "README.md", "RELEASING.md", "ROADMAP.md", "SECURITY.md"]) {
   requireCondition(existsSync(resolve(root, file)), `${file} is missing`);
   requireCondition(packageJson.files?.includes(file), `${file} is not included in the npm package`);
+}
+
+requireCondition(packageJson.files?.includes("docs"), "docs are not included in the npm package");
+for (const file of [
+  "docs/assets/architecture.svg",
+  "docs/assets/demo.gif",
+  "docs/codex.md",
+  "docs/cursor.md",
+  "docs/claude-desktop.md",
+]) {
+  requireCondition(existsSync(resolve(root, file)), `${file} is missing`);
 }
 
 requireCondition(

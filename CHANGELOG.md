@@ -2,6 +2,23 @@
 
 All notable changes to ToolFence are documented here. The project follows Semantic Versioning.
 
+## [0.2.3] - 2026-08-21
+
+Adoption and diagnostics update on the stable v0.2 security baseline.
+
+### Added
+
+- A reproducible end-to-end Broker/proxy/official Filesystem MCP demo and generated terminal animation.
+- Copy-ready Codex, Cursor, and Claude Desktop setup guides.
+- A public roadmap, issue forms, discussion forms, and pull request template.
+- A compact architecture diagram and product-layer comparison.
+- A `toolfence doctor` command with text and JSON reports for Node.js, Policy, Broker permissions, and explicit upstream startup probes.
+
+### Changed
+
+- Reworked the README around a three-minute first run and the current v0.2.3 release.
+- Extended package smoke and release checks to cover the distributed guides, visual assets, and installed diagnostic command.
+
 ## [0.2.2] - 2026-08-19
 
 Recovery release for the 0.2.1 artifact after npm trusted publishing setup was completed.

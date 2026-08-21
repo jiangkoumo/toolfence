@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -28,6 +28,19 @@ try {
   });
 
   const executable = join(installDirectory, "node_modules", ".bin", "toolfence");
+  const installedPackage = join(installDirectory, "node_modules", packageJson.name);
+  for (const file of [
+    "ROADMAP.md",
+    "docs/assets/architecture.svg",
+    "docs/assets/demo.gif",
+    "docs/codex.md",
+    "docs/cursor.md",
+    "docs/claude-desktop.md",
+  ]) {
+    if (!existsSync(join(installedPackage, file))) {
+      throw new Error(`Installed package is missing ${file}`);
+    }
+  }
   const version = run(executable, ["--version"], { cwd: installDirectory, capture: true }).trim();
   if (version !== packageJson.version) {
     throw new Error(`Installed CLI version ${JSON.stringify(version)} does not match ${packageJson.version}`);
@@ -35,6 +48,14 @@ try {
 
   run(executable, ["policy", "init", "--policy", "policy.yaml"], { cwd: installDirectory });
   run(executable, ["policy", "check", "--policy", "policy.yaml"], { cwd: installDirectory });
+  const doctor = JSON.parse(run(
+    executable,
+    ["doctor", "--policy", "policy.yaml", "--json", "--", process.execPath, "--version"],
+    { cwd: installDirectory, capture: true },
+  ));
+  if (!doctor.ok || !doctor.checks?.some((check) => check.check === "upstream" && check.status === "pass")) {
+    throw new Error("Installed doctor command did not pass its startup probe");
+  }
   run(
     process.execPath,
     [
