@@ -41,6 +41,7 @@ requireCondition(packageJson.files?.includes("docs"), "docs are not included in 
 for (const file of [
   "docs/assets/architecture.svg",
   "docs/assets/demo.gif",
+  "docs/assets/env-leak-demo.gif",
   "docs/codex.md",
   "docs/cursor.md",
   "docs/claude-desktop.md",

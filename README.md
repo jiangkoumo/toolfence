@@ -5,17 +5,27 @@
 [![npm downloads](https://img.shields.io/npm/dm/toolfence-mcp)](https://www.npmjs.com/package/toolfence-mcp)
 [![license](https://img.shields.io/npm/l/toolfence-mcp)](LICENSE)
 
-**A local, fail-closed firewall for MCP tool calls.**
+**A vendor-neutral, fail-closed firewall for MCP tool calls.**
 
-ToolFence puts testable least-privilege policies and human approval between AI agents and stdio MCP servers. It allows safe operations, blocks dangerous ones, and asks before forwarding calls that need a human decision—without code changes to the MCP host or upstream server.
+ToolFence enforces one testable least-privilege policy between AI agents and stdio MCP servers. Use the same policy from Codex, Cursor, or Claude Desktop: safe calls pass, dangerous calls stop before upstream execution, and uncertain calls require human approval—without changing the MCP host or server.
 
-![ToolFence end-to-end MCP demo](docs/assets/demo.gif)
+- **Portable policy:** keep resource and command rules independent of a single Agent platform.
+- **Deterministic enforcement:** normalize tool calls, give `deny` precedence, and fail closed on unknown or ambiguous actions.
+- **Auditable evidence:** record privacy-conscious decisions and result hashes without storing raw arguments or results.
 
-The animation records a reproducible end-to-end run with an isolated Broker, the ToolFence proxy, and the official Filesystem MCP Server. The approval uses the real queue and `allow-once` CLI. [Run it or regenerate the GIF](docs/demo.md).
+## Same MCP call. Different outcome.
 
-![ToolFence architecture](docs/assets/architecture.svg)
+![ToolFence blocks a synthetic .env leak before it reaches the MCP server](docs/assets/env-leak-demo.gif)
 
-## Try it in three minutes
+The animation sends the same `.env` read to the official Filesystem MCP Server twice:
+
+- without ToolFence, the server returns the explicitly synthetic value `OPENAI_API_KEY=TF_DEMO_ONLY`;
+- with ToolFence, the `protect-secrets` rule denies the call before upstream execution;
+- the demo verifies that the denied response and audit log do not contain the synthetic secret.
+
+These are real JSON-RPC processes and assertions, not hard-coded policy results. [Run the comparison or regenerate the GIF](docs/demo.md).
+
+## Protect a Filesystem MCP server in three minutes
 
 The npm package is `toolfence-mcp`; the installed command is `toolfence`.
 
@@ -46,7 +56,7 @@ Connect the wrapper to your MCP host:
 | Cursor | [`docs/cursor.md`](docs/cursor.md) |
 | Claude Desktop | [`docs/claude-desktop.md`](docs/claude-desktop.md) |
 
-## Why ToolFence
+## What ToolFence adds
 
 - **Semantic policies:** normalize common Filesystem, Shell, Git, and HTTP tool calls into operations such as `fs.read`, `shell.exec`, `git.write`, and `net.request`, then match paths, exact command arguments, hosts, and HTTP methods.
 - **Deterministic enforcement:** `deny` overrides other matches, multi-resource requests are evaluated as a unit, and unknown or ambiguous actions fail closed.
@@ -63,6 +73,8 @@ Connect the wrapper to your MCP host:
 | OS sandbox or container | Process, filesystem, environment, and network access | Semantic intent of an MCP tool call by itself |
 
 ToolFence is designed to complement host approvals and OS isolation. It is not a replacement for either.
+
+![ToolFence architecture](docs/assets/architecture.svg)
 
 ## Status
 
