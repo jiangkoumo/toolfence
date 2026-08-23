@@ -2,6 +2,22 @@
 
 All notable changes to ToolFence are documented here. The project follows Semantic Versioning.
 
+## [0.2.4] - 2026-08-23
+
+Cross-host initialization, path resolution hardening, and proxy memory safety update.
+
+### Added
+
+- `toolfence host init` and `toolfence init --host` commands for automated configuration generation and injection for Cursor, Claude Desktop, Claude Code, and Codex.
+- Safe direct injection (`--write`), preview (`--dry-run` default), and machine-readable JSON output (`--json`) with automatic config backup creation (`.bak`).
+- Comprehensive test suites covering host path mappings, snippet formatting, and multi-platform path resolutions.
+
+### Changed
+
+- Hardened path canonicalization (`canonicalizePath`) with standard `basename` resolution for non-existent paths across symbolic links and platforms.
+- Bounded in-flight proxy request tracking to protect against unbounded memory growth from non-responsive upstream servers.
+- Added unit tests for headless and aborted TTY approval flows, bringing overall line coverage to over 83%.
+
 ## [0.2.3] - 2026-08-21
 
 Adoption and diagnostics update on the stable v0.2 security baseline.

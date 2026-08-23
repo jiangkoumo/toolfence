@@ -19,6 +19,7 @@ import {
 } from "./broker.js";
 import { initPolicy, loadPolicy } from "./config.js";
 import { diagnose, formatDoctorReport, type DoctorOptions } from "./doctor.js";
+import { generateHostSnippet, injectHostConfig, normalizeHost, type SupportedHost } from "./host.js";
 import { canonicalizePath } from "./paths.js";
 import { PolicyEngine } from "./policy.js";
 import { checkPolicy, explainPolicy, testPolicy } from "./policy-tools.js";
@@ -46,12 +47,26 @@ export interface ApprovalOptions {
   decision?: BrokerDecision;
 }
 
+export interface HostInitOptions {
+  command: "host-init";
+  host: SupportedHost;
+  policy?: string;
+  server?: string;
+  workspace: string;
+  write: boolean;
+  json: boolean;
+  scope?: "project" | "global";
+  upstreamCommand?: string;
+  args: string[];
+}
+
 export type CliOptions =
   | WrapOptions
   | { command: "broker" }
   | { command: "status" }
   | (DoctorOptions & { command: "doctor"; json: boolean })
   | ApprovalOptions
+  | HostInitOptions
   | { command: "audit-summary"; audit: string; json: boolean }
   | { command: "audit-tail"; audit: string; json: boolean; lines: number }
   | { command: "policy-init"; policy: string }
@@ -67,6 +82,8 @@ Usage:
   toolfence broker
   toolfence status
   toolfence doctor [--policy <file>] [--workspace <path>] [--json] [-- <command> [args...]]
+  toolfence host init --host <name> [--write] [--policy <file>] [--server <name>] [--workspace <path>] [--scope <project|global>] [-- <command> [args...]]
+  toolfence init --host <name> [--write] [--policy <file>] [--server <name>] [--workspace <path>] [--scope <project|global>] [-- <command> [args...]]
   toolfence approvals [--json]
   toolfence approvals --id <approval-id> --decision <allow-once|allow-session|deny>
   toolfence audit summary [--audit <file>] [--json]
@@ -82,6 +99,15 @@ Wrap options:
   --workspace <path>    Working directory and relative-path root (default: cwd)
   --audit <file>        JSONL audit path (default: .toolfence/audit.jsonl)
   --approval <mode>     broker (default) or tty
+
+Host options:
+  --host <name>         cursor, claude, claude-desktop, claude-code, or codex (required)
+  --write               Write/merge configuration directly to host config file
+  --policy <file>       Policy path (default: ./toolfence.yaml)
+  --server <name>       Server name in host config (default: filesystem)
+  --workspace <path>    Workspace path (default: cwd)
+  --scope <type>        project (default) or global
+  --json                Print snippet as JSON
 
 Approval options:
   --json                Print the privacy-safe pending queue as JSON
@@ -233,7 +259,44 @@ export function parseCli(argv: string[]): CliOptions | "help" | "version" {
     }
     throw new Error("Unreachable policy subcommand");
   }
-  if (command !== "wrap") throw new Error("Expected wrap, broker, status, doctor, approvals, audit, or policy");
+  if (command === "host" || (command === "init" && toolFenceArgs.includes("--host"))) {
+    const isHostCommand = command === "host";
+    const subcommand = isHostCommand ? argv[1] : "init";
+    const subArgs = isHostCommand ? toolFenceArgs.slice(2) : toolFenceArgs.slice(1);
+    if (subcommand !== "init" && subcommand !== "snippet") {
+      throw new Error("Expected host subcommand: init or snippet");
+    }
+    const writeFlag = takeBooleanFlag(subArgs, "--write");
+    const jsonFlag = takeBooleanFlag(writeFlag.args, "--json");
+    const options = optionMap(jsonFlag.args);
+    const allowed = new Set(["--host", "--policy", "--server", "--workspace", "--scope"]);
+    for (const flag of options.keys()) {
+      if (!allowed.has(flag)) throw new Error(`Unknown option for host ${subcommand}: ${flag}`);
+    }
+    const rawHost = options.get("--host");
+    if (!rawHost) throw new Error("--host is required (e.g. cursor, claude, claude-desktop, claude-code, or codex)");
+    const host = normalizeHost(rawHost);
+    const scope = options.get("--scope");
+    if (scope && scope !== "project" && scope !== "global") {
+      throw new Error("--scope must be project or global");
+    }
+    const upstream = separator === -1 ? [] : argv.slice(separator + 1);
+    const workspace = canonicalizePath(options.get("--workspace") ?? process.cwd(), process.cwd());
+
+    return {
+      command: "host-init",
+      host,
+      policy: options.get("--policy") ? resolve(options.get("--policy")!) : undefined,
+      server: options.get("--server"),
+      workspace,
+      scope: scope as "project" | "global" | undefined,
+      write: subcommand === "init" && writeFlag.present,
+      json: jsonFlag.present,
+      upstreamCommand: upstream[0],
+      args: upstream.slice(1),
+    };
+  }
+  if (command !== "wrap") throw new Error("Expected wrap, broker, status, doctor, approvals, audit, policy, or host");
   if (separator === -1 || separator === argv.length - 1) {
     throw new Error("Expected an upstream command after '--'");
   }
@@ -408,6 +471,28 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
       const result = testPolicy(options.policy, options.cases);
       process.stdout.write(`${result.output}\n`);
       if (result.failed) process.exitCode = 1;
+      return;
+    }
+    if (options.command === "host-init") {
+      if (options.write) {
+        const result = injectHostConfig(options);
+        if (options.json) {
+          process.stdout.write(`${JSON.stringify(result)}\n`);
+        } else {
+          process.stdout.write(
+            `${result.created ? "Created" : "Updated"} ${result.host} config: ${result.configPath}${result.backupPath ? ` (backup: ${result.backupPath})` : ""}\n\n${result.content}`,
+          );
+        }
+        return;
+      }
+      const result = generateHostSnippet(options);
+      if (options.json) {
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+      } else {
+        process.stdout.write(
+          `Target configuration: ${result.configPath}\nTo write this configuration directly, pass --write.\n\n${result.rendered}\n`,
+        );
+      }
       return;
     }
     await runWrap(options);

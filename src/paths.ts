@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { minimatch } from "minimatch";
 import type { PolicyContext } from "./types.js";
 
@@ -17,7 +17,7 @@ export function canonicalizePath(input: string, workspace: string): string {
     if (parent === cursor) {
       return absolute;
     }
-    missing.unshift(cursor.slice(parent.length + (parent.endsWith(sep) ? 0 : 1)));
+    missing.unshift(basename(cursor));
     cursor = parent;
   }
 

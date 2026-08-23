@@ -48,13 +48,22 @@ toolfence wrap \
 
 The generated policy is conservative and never replaces an existing file. See the annotated [`examples/policy.yaml`](examples/policy.yaml).
 
-Connect the wrapper to your MCP host:
+Connect the wrapper to your MCP host with one command:
 
-| Host | Copy-ready guide |
-| --- | --- |
-| Codex | [`docs/codex.md`](docs/codex.md) |
-| Cursor | [`docs/cursor.md`](docs/cursor.md) |
-| Claude Desktop | [`docs/claude-desktop.md`](docs/claude-desktop.md) |
+```bash
+# Preview or write configuration for your favorite host
+toolfence host init --host cursor --write
+toolfence host init --host claude-desktop --write
+toolfence host init --host codex --write
+toolfence host init --host claude-code --write
+```
+
+| Host | Copy-ready guide | Quick command |
+| --- | --- | --- |
+| Cursor | [`docs/cursor.md`](docs/cursor.md) | `toolfence host init --host cursor --write` |
+| Claude Desktop | [`docs/claude-desktop.md`](docs/claude-desktop.md) | `toolfence host init --host claude-desktop --write` |
+| Codex | [`docs/codex.md`](docs/codex.md) | `toolfence host init --host codex --write` |
+| Claude Code | [`docs/claude-desktop.md`](docs/claude-desktop.md) | `toolfence host init --host claude-code --write` |
 
 ## What ToolFence adds
 

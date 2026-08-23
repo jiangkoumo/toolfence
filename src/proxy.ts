@@ -201,6 +201,10 @@ export function startProxy(options: ProxyOptions): ProxyController {
 
   function forward(line: string, request?: JsonRpcRequest, action?: NormalizedAction): void {
     if (request?.id !== undefined) {
+      if (forwarded.size > 2000) {
+        const oldestKey = forwarded.keys().next().value;
+        if (oldestKey) forwarded.delete(oldestKey);
+      }
       forwarded.set(requestKey(request.id), { id: request.id, method: request.method, action });
     }
     try {

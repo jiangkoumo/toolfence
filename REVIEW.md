@@ -1,4 +1,4 @@
-# ToolFence v0.2.3 Review Record
+# ToolFence v0.2.4 Review Record
 
 ## Review gates
 
@@ -10,19 +10,20 @@
 - Operational CLI: JSON approval snapshots contain only the Broker's privacy-safe request shape; targeted decisions require an exact pending approval ID and an explicit bounded decision value.
 - Audit inspection: summaries and tails are read-only, malformed JSONL fails with a line number, and no new audit data is created.
 - Diagnostics: Doctor checks do not expose Policy contents or upstream output; an explicit startup probe uses argv without a shell and terminates the probed process group.
+- Host automation: host configuration snippets and file injections preserve existing servers, support dry-run previews, and back up modified configuration files.
 - Failure behavior: policy, YAML, Schema, audit, Broker, Socket, and upstream startup errors are summarized without default stacks and fail closed.
 - Packaging: executable CLI, public audit helpers, example policy, README, development manual, test plan, and review record are included.
 
 ## Acceptance evidence
 
-Verified locally on 2026-08-21:
+Verified locally on 2026-08-23:
 
-- `npm run verify`: passed (typecheck, 65 tests, enforced coverage, end-to-end demo, build, clean-install package smoke, and package dry run).
-- V8 coverage passed at 80.36% statements/lines, 77.03% branches, and 90.38% functions.
+- `npm run verify`: passed (typecheck, 78 tests, enforced coverage, end-to-end demo, build, clean-install package smoke, and package dry run).
+- V8 coverage passed at 83.23% statements/lines, 76.79% branches, and 91.81% functions.
 - Real integrations: official Filesystem MCP Server plus Shell, HTTP, and Git fixtures passed.
-- The active macOS runtime passed the 65-test suite, typecheck, build, end-to-end demo, and clean-install package smoke; CI retains macOS/Linux coverage for Node.js 20, 22, and 24.
-- Package inspection: 47 intended files, including executable CLI, public TypeScript declarations, host guides, visual assets, and dual-use disclosure.
-- CLI tests: audit summary/tail JSON output, a real non-interactive Broker approval, and Doctor Policy/Broker/Socket/upstream checks passed; version and installed binary smoke tests succeeded.
+- The active macOS runtime passed the 78-test suite, typecheck, build, end-to-end demo, and clean-install package smoke; CI retains macOS/Linux coverage for Node.js 20, 22, and 24.
+- Package inspection: 50 intended files, including executable CLI, public TypeScript declarations, host guides, visual assets, and dual-use disclosure.
+- CLI tests: audit summary/tail JSON output, a real non-interactive Broker approval, host init/snippet commands, and Doctor Policy/Broker/Socket/upstream checks passed; version and installed binary smoke tests succeeded.
 - `npm audit` and `npm audit --omit=dev`: zero vulnerabilities.
 - CI workflow: macOS/Linux × Node.js 20/22/24 is configured; Linux cells run when the repository is pushed to CI.
 

@@ -12,9 +12,21 @@ export {
   startBroker,
 } from "./broker.js";
 export { initPolicy, loadPolicy, parsePolicy } from "./config.js";
+export {
+  generateHostSnippet,
+  injectHostConfig,
+  normalizeHost,
+  resolveHostConfigPath,
+  supportedHosts,
+  type HostConfigOptions,
+  type HostInjectResult,
+  type HostSnippetResult,
+  type SupportedHost,
+} from "./host.js";
 export { canonicalizePath, resourceMatches } from "./paths.js";
 export { PolicyEngine } from "./policy.js";
 export { checkPolicy, explainPolicy, testPolicy } from "./policy-tools.js";
 export { startProxy } from "./proxy.js";
 export { fingerprintToolList, toolSchemaFingerprint } from "./schema.js";
 export type * from "./types.js";
+
