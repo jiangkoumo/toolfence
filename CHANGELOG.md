@@ -2,6 +2,16 @@
 
 All notable changes to ToolFence are documented here. The project follows Semantic Versioning.
 
+## [0.3.1] - 2026-08-24
+
+Release reliability follow-up for v0.3.0.
+
+### Fixed
+
+- Increased the deterministic fuzz invariant timeout for slower macOS/Node.js CI runners.
+- Made trusted publishing idempotent when npm reports an already staged version before it becomes visible through registry metadata.
+- Restored immutable release sequencing by publishing follow-up changes under a new patch version instead of reusing `v0.3.0`.
+
 ## [0.3.0] - 2026-08-24
 
 Policy recipes library, output secret redaction (DLP), and SSRF protection update.

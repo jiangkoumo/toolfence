@@ -37,7 +37,21 @@ jobs:
           fi
       - name: Publish with npm trusted publishing
         if: steps.registry.outputs.exists != 'true'
-        run: npm publish
+        shell: bash
+        run: |
+          set +e
+          output=$(npm publish 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          if grep -Fq 'Cannot publish over previously staged version' <<< "$output"; then
+            echo "${{ steps.registry.outputs.name }}@${{ steps.registry.outputs.version }} is already staged; treating the publish as idempotent."
+            exit 0
+          fi
+          exit "$status"
       - name: Skip an already published version
         if: steps.registry.outputs.exists == 'true'
         run: echo "${{ steps.registry.outputs.name }}@${{ steps.registry.outputs.version }} is already available; verification passed."

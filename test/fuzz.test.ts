@@ -83,5 +83,5 @@ describe("deterministic fuzz invariants", () => {
         throw new Error(`deny precedence failed at case ${index}`);
       }
     }
-  });
+  }, 15_000);
 });

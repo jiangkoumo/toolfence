@@ -89,7 +89,7 @@ ToolFence is designed to complement host approvals and OS isolation. It is not a
 
 ## Status
 
-Version 0.2.3 provides the stable v0.2 security baseline with scriptable approvals, audit inspection and diagnostic commands, copy-ready MCP Host configuration, enforced test coverage, and npm trusted publishing provenance.
+Version 0.3.1 provides built-in policy recipes, default-on output secret redaction, scriptable approvals, audit inspection and diagnostic commands, copy-ready MCP Host configuration, enforced test coverage, and npm trusted publishing provenance.
 
 ToolFence is **not a sandbox for a malicious MCP server process**: the upstream process still runs with the current user's operating-system permissions.
 
