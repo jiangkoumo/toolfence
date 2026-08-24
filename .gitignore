@@ -3,4 +3,5 @@ dist/
 coverage/
 .toolfence/audit.jsonl
 *.log
+*.tgz
 .DS_Store

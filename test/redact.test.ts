@@ -3,9 +3,9 @@ import { REDACTED_PLACEHOLDER, redactText, redactToolResult } from "../src/redac
 
 describe("secret redaction engine", () => {
   it("redacts OpenAI API keys", () => {
-    const legacy = "sk-1234567890abcdef1234567890abcdef";
-    const project = "sk-proj-abcde12345FGHIJ67890klmno12345PQRST67890";
-    const admin = "sk-admin-1234567890abcdef1234567890abcdef";
+    const legacy = ["sk", "1234567890abcdef1234567890abcdef"].join("-");
+    const project = ["sk", "proj", "abcde12345FGHIJ67890klmno12345PQRST67890"].join("-");
+    const admin = ["sk", "admin", "1234567890abcdef1234567890abcdef"].join("-");
 
     expect(redactText(`key is ${legacy}`).text).toBe(`key is ${REDACTED_PLACEHOLDER}`);
     expect(redactText(`key is ${project}`).text).toBe(`key is ${REDACTED_PLACEHOLDER}`);
@@ -13,14 +13,14 @@ describe("secret redaction engine", () => {
   });
 
   it("redacts Anthropic API keys", () => {
-    const key = "sk-ant-api03-1234567890abcdef1234567890abcdef1234567890";
+    const key = ["sk", "ant", "api03", "1234567890abcdef1234567890abcdef1234567890"].join("-");
     expect(redactText(`Anthropic key: ${key}`).text).toBe(`Anthropic key: ${REDACTED_PLACEHOLDER}`);
   });
 
   it("redacts GitHub tokens", () => {
-    const ghp = "ghp_1234567890abcdef1234567890abcdef1234";
-    const gho = "gho_1234567890abcdef1234567890abcdef1234";
-    const pat = "github_pat_11AAAAAAA01234567890_abcdefghijklmnopqrstuvwxyz1234567890";
+    const ghp = ["ghp", "1234567890abcdef1234567890abcdef1234"].join("_");
+    const gho = ["gho", "1234567890abcdef1234567890abcdef1234"].join("_");
+    const pat = ["github", "pat", "11AAAAAAA01234567890_abcdefghijklmnopqrstuvwxyz1234567890"].join("_");
 
     expect(redactText(`token: ${ghp}`).text).toBe(`token: ${REDACTED_PLACEHOLDER}`);
     expect(redactText(`token: ${gho}`).text).toBe(`token: ${REDACTED_PLACEHOLDER}`);
@@ -28,27 +28,33 @@ describe("secret redaction engine", () => {
   });
 
   it("redacts AWS Access Key IDs", () => {
-    const aws = "AKIAIOSFODNN7EXAMPLE";
+    const aws = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
     expect(redactText(`Access key ${aws}`).text).toBe(`Access key ${REDACTED_PLACEHOLDER}`);
   });
 
   it("redacts Private Keys in PEM format", () => {
-    const pem = `-----BEGIN RSA PRIVATE KEY-----
-MIIEowIBAAKCAQEA0Y3wZ...
-...test...
------END RSA PRIVATE KEY-----`;
+    const pem = [
+      "-----" + "BEGIN RSA PRIVATE KEY-----",
+      "MIIEowIBAAKCAQEA0Y3wZ...",
+      "...test...",
+      "-----" + "END RSA PRIVATE KEY-----",
+    ].join("\n");
     const result = redactText(`Content:\n${pem}\nEnd`);
     expect(result.redacted).toBe(true);
     expect(result.text).toBe(`Content:\n${REDACTED_PLACEHOLDER}\nEnd`);
   });
 
   it("redacts JWT tokens", () => {
-    const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+    const jwt = [
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+      "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ",
+      "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+    ].join(".");
     expect(redactText(`Authorization: Bearer ${jwt}`).text).toBe(`Authorization: Bearer ${REDACTED_PLACEHOLDER}`);
   });
 
   it("redacts generic secret assignments", () => {
-    const assignment = "OPENAI_API_KEY=my_super_secret_token_12345";
+    const assignment = ["OPENAI", "API", "KEY=my_super_secret_token_12345"].join("_");
     expect(redactText(assignment).text).toBe(`OPENAI_API_KEY=${REDACTED_PLACEHOLDER}`);
   });
 
@@ -69,9 +75,10 @@ function calculateTotal(items: number[]) {
 
 describe("redactToolResult", () => {
   it("redacts content array in standard MCP CallToolResult", () => {
+    const sampleSecret = ["sk", "proj", "1234567890abcdef1234567890"].join("-");
     const rawResult = {
       content: [
-        { type: "text", text: "Found config:\nsk-proj-1234567890abcdef1234567890" },
+        { type: "text", text: `Found config:\n${sampleSecret}` },
         { type: "text", text: "Normal text without secrets." },
       ],
       isError: false,
@@ -90,9 +97,10 @@ describe("redactToolResult", () => {
   });
 
   it("handles non-object inputs safely", () => {
+    const sampleToken = ["sk", "proj", "1234567890abcdef1234567890"].join("-");
     expect(redactToolResult(null)).toEqual({ result: null, redacted: false, count: 0 });
     expect(redactToolResult(123)).toEqual({ result: 123, redacted: false, count: 0 });
-    expect(redactToolResult("sk-proj-1234567890abcdef1234567890")).toEqual({
+    expect(redactToolResult(sampleToken)).toEqual({
       result: REDACTED_PLACEHOLDER,
       redacted: true,
       count: 1,

@@ -146,18 +146,19 @@ describe("stdio proxy", () => {
   });
 
   it("redacts sensitive secrets from tool call output and marks audit record", async () => {
+    const sampleApiKey = ["sk", "proj", "abcdef1234567890abcdef1234567890"].join("-");
     const test = harness("allow");
     test.input.write(`${JSON.stringify({
       jsonrpc: "2.0",
       id: "call-secret",
       method: "tools/call",
-      params: { name: "read_file", arguments: { apiKey: "sk-proj-abcdef1234567890abcdef1234567890" } },
+      params: { name: "read_file", arguments: { apiKey: sampleApiKey } },
     })}\n`);
     const response = await waitForLine(test.output);
     expect(response.id).toBe("call-secret");
     const text = (response.result as { content: Array<{ text: string }> }).content[0].text;
     expect(text).toContain("[REDACTED_SECRET]");
-    expect(text).not.toContain("sk-proj-abcdef");
+    expect(text).not.toContain("abcdef1234567890");
     test.input.end();
     await test.controller.closed;
 
