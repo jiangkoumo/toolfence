@@ -1,0 +1,28 @@
+# ToolFence policy for Fetch / HTTP MCP servers
+version: 1
+default: ask
+
+rules:
+  - id: deny-private-networks-and-metadata
+    effect: deny
+    operations: [net.request]
+    hosts:
+      - "127.*"
+      - "localhost"
+      - "169.254.*"
+      - "10.*"
+      - "172.1[6-9].*"
+      - "172.2[0-9].*"
+      - "172.3[0-1].*"
+      - "192.168.*"
+      - "[[]::[]]"
+      - "[[]::1[]]"
+      - "[[]f[cd]*"
+      - "[[]fe[89ab]*"
+      - "*.local"
+      - "*.internal"
+
+  - id: allow-public-web-read
+    effect: allow
+    operations: [net.request]
+    methods: [GET, HEAD]

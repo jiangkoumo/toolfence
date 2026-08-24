@@ -1,0 +1,19 @@
+# ToolFence policy for SQLite MCP server
+version: 1
+default: ask
+
+rules:
+  - id: protect-database-secrets
+    effect: deny
+    operations: [fs.read, fs.write, fs.delete]
+    resources:
+      - "**/.env"
+      - "**/.env.*"
+      - "**/*.pem"
+      - "${home}/.ssh/**"
+
+  - id: allow-workspace-db-read
+    effect: allow
+    operations: [fs.read]
+    resources:
+      - "${workspace}/**"

@@ -2,6 +2,19 @@
 
 All notable changes to ToolFence are documented here. The project follows Semantic Versioning.
 
+## [0.3.0] - 2026-08-24
+
+Policy recipes library, output secret redaction (DLP), and SSRF protection update.
+
+### Added
+
+- Built-in policy recipes for Filesystem, GitHub, Fetch, SQLite, PostgreSQL, and Git servers with CLI `--recipe` and `--list-recipes` support.
+- Default-on output secret redaction for successful tool results, structured sensitive fields, and JSON-RPC errors, with audit redaction markers.
+
+### Security
+
+- Expanded the Fetch recipe's literal private-address protections to cover IPv4 private ranges and IPv6 loopback, unique-local, and link-local destinations.
+
 ## [0.2.4] - 2026-08-23
 
 Cross-host initialization, path resolution hardening, and proxy memory safety update.

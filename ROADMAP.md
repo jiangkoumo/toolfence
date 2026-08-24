@@ -2,17 +2,17 @@
 
 ToolFence is an early-stage security project. This roadmap communicates priorities, not release promises. Security invariants and fail-closed behavior take precedence over dates.
 
-## Now: adoption-ready v0.2.x
+## Now: adoption-ready v0.2.x & v0.3.0 baseline
 
+- Built-in curated policy recipes (`filesystem`, `github`, `fetch`, `sqlite`, `postgres`, `git`) via `toolfence policy init --recipe <name>`.
+- Automatic output secret redaction (DLP) for tool execution results without storing raw secret payloads in audit logs.
 - Keep Codex, Cursor, and Claude Desktop setup guides tested and current.
-- Maintain a reproducible policy demo and concise security-boundary documentation.
+- Maintain reproducible policy demos and concise security-boundary documentation.
 - Improve issue triage, contribution guidance, and release notes.
-- Add focused regression tests for policy, Broker, proxy lifecycle, and package installation changes.
 - Keep the `toolfence doctor` installation, Policy, Broker, Socket, and upstream startup checks current.
 
 ## Next: safer and easier operation
 
-- Design output secret redaction without logging raw upstream results.
 - Track MCP protocol compatibility explicitly and expand integration fixtures as the protocol evolves.
 - Improve interactive approval portability, including a Windows-compatible transport.
 

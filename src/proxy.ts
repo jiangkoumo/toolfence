@@ -6,6 +6,7 @@ import { normalizeToolCall } from "./adapters.js";
 import type { ApprovalRequester } from "./approval.js";
 import type { AuditLogger } from "./audit.js";
 import type { PolicyEngine } from "./policy.js";
+import { redactToolResult } from "./redact.js";
 import { fingerprintToolList } from "./schema.js";
 import type { Decision, JsonRpcId, JsonRpcRequest, NormalizedAction } from "./types.js";
 
@@ -164,16 +165,43 @@ export function startProxy(options: ProxyOptions): ProxyController {
             }
           }
           if (tracked.action) {
+            let redacted = false;
             try {
-              options.audit.result(
-                tracked.id,
-                createHash("sha256").update(line).digest("hex"),
-                message.error !== undefined,
-              );
-            } catch (error) {
+              if (options.policy.redactSecrets) {
+                if (message.result !== undefined) {
+                  const redaction = redactToolResult(message.result);
+                  if (redaction.redacted) {
+                    redacted = true;
+                    message.result = redaction.result;
+                  }
+                }
+                if (message.error !== undefined) {
+                  const redaction = redactToolResult(message.error);
+                  if (redaction.redacted) {
+                    redacted = true;
+                    message.error = redaction.result;
+                  }
+                }
+                if (redacted) line = JSON.stringify(message);
+              }
+            } catch {
               suppress = true;
-              writeOutput(rpcError(tracked.id, -32603, `ToolFence audit failed: ${errorMessage(error)}`));
+              writeOutput(rpcError(tracked.id, -32603, "ToolFence output redaction failed"));
               child.kill("SIGTERM");
+            }
+            if (!suppress) {
+              try {
+                options.audit.result(
+                  tracked.id,
+                  createHash("sha256").update(line).digest("hex"),
+                  message.error !== undefined,
+                  redacted,
+                );
+              } catch (error) {
+                suppress = true;
+                writeOutput(rpcError(tracked.id, -32603, `ToolFence audit failed: ${errorMessage(error)}`));
+                child.kill("SIGTERM");
+              }
             }
           }
           forwarded.delete(key);

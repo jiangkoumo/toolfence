@@ -23,6 +23,7 @@ import { generateHostSnippet, injectHostConfig, normalizeHost, type SupportedHos
 import { canonicalizePath } from "./paths.js";
 import { PolicyEngine } from "./policy.js";
 import { checkPolicy, explainPolicy, testPolicy } from "./policy-tools.js";
+import { listRecipes } from "./recipes.js";
 import { startProxy } from "./proxy.js";
 
 const { version } = JSON.parse(
@@ -69,7 +70,7 @@ export type CliOptions =
   | HostInitOptions
   | { command: "audit-summary"; audit: string; json: boolean }
   | { command: "audit-tail"; audit: string; json: boolean; lines: number }
-  | { command: "policy-init"; policy: string }
+  | { command: "policy-init"; policy: string; recipe?: string; listRecipes?: boolean }
   | { command: "policy-check"; policy: string }
   | { command: "policy-explain"; policy: string; action: string; workspace: string }
   | { command: "policy-test"; policy: string; cases: string };
@@ -88,7 +89,7 @@ Usage:
   toolfence approvals --id <approval-id> --decision <allow-once|allow-session|deny>
   toolfence audit summary [--audit <file>] [--json]
   toolfence audit tail [--audit <file>] [--lines <count>] [--json]
-  toolfence policy init [--policy <file>]
+  toolfence policy init [--policy <file>] [--recipe <name>] [--list-recipes]
   toolfence policy check --policy <file>
   toolfence policy explain --policy <file> --action <file> [--workspace <path>]
   toolfence policy test --policy <file> --cases <file>
@@ -118,6 +119,11 @@ Audit options:
   --audit <file>        JSONL audit path (default: .toolfence/audit.jsonl)
   --lines <count>       Tail record count, 1-10000 (default: 20)
   --json                Print summary or tail output as JSON
+
+Policy options:
+  --policy <file>       Policy YAML path (default: toolfence.yaml for init)
+  --recipe <name>       Starter recipe (filesystem, github, fetch, sqlite, postgres, git)
+  --list-recipes        List all available built-in policy recipes
 
 Doctor options:
   --policy <file>       Validate a policy file
@@ -224,8 +230,22 @@ export function parseCli(argv: string[]): CliOptions | "help" | "version" {
   }
   if (command === "policy") {
     const subcommand = argv[1];
+    if (subcommand === "init") {
+      const listFlag = takeBooleanFlag(argv.slice(2), "--list-recipes");
+      const options = optionMap(listFlag.args);
+      for (const flag of options.keys()) {
+        if (flag !== "--policy" && flag !== "--recipe") {
+          throw new Error(`Unknown option for policy init: ${flag}`);
+        }
+      }
+      return {
+        command: "policy-init",
+        policy: resolve(options.get("--policy") ?? "toolfence.yaml"),
+        recipe: options.get("--recipe"),
+        listRecipes: listFlag.present,
+      };
+    }
     const allowedBySubcommand = new Map<string, Set<string>>([
-      ["init", new Set(["--policy"])],
       ["check", new Set(["--policy"])],
       ["explain", new Set(["--policy", "--action", "--workspace"])],
       ["test", new Set(["--policy", "--cases"])],
@@ -235,9 +255,6 @@ export function parseCli(argv: string[]): CliOptions | "help" | "version" {
     const options = optionMap(argv.slice(2));
     for (const flag of options.keys()) {
       if (!allowed.has(flag)) throw new Error(`Unknown option for policy ${subcommand}: ${flag}`);
-    }
-    if (subcommand === "init") {
-      return { command: "policy-init", policy: resolve(options.get("--policy") ?? "toolfence.yaml") };
     }
     const policy = options.get("--policy");
     if (!policy) throw new Error("--policy is required");
@@ -456,7 +473,15 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
       return;
     }
     if (options.command === "policy-init") {
-      process.stdout.write(`Created policy: ${initPolicy(options.policy)}\n`);
+      if (options.listRecipes) {
+        const recipes = listRecipes();
+        const formatted = recipes
+          .map((r) => `  ${r.name.padEnd(12)} ${r.description} (default server: ${r.defaultServer})`)
+          .join("\n");
+        process.stdout.write(`Available ToolFence Policy Recipes:\n${formatted}\n\nUse with: toolfence policy init --recipe <name>\n`);
+        return;
+      }
+      process.stdout.write(`Created policy: ${initPolicy(options.policy, options.recipe)}\n`);
       return;
     }
     if (options.command === "policy-check") {

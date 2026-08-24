@@ -46,6 +46,7 @@ export interface PolicyRule {
 export interface PolicyConfig {
   version: 1;
   default: Effect;
+  redactSecrets?: boolean;
   rules: PolicyRule[];
 }
 

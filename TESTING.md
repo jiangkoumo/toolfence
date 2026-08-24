@@ -27,6 +27,8 @@ The release gate is risk-based: a passing happy path is insufficient unless deni
 - Approval timeout, unavailable Broker, authentication failure, and disconnect fail closed.
 - Session approval keys contain Server, Tool, operation, and Schema fingerprint.
 - Broker and audit records omit raw arguments and raw results.
+- Successful results, structured sensitive fields, and JSON-RPC errors are redacted before forwarding and audit hashing.
+- Built-in Fetch policy recipes deny common literal IPv4 and IPv6 local destinations before public read rules are considered.
 - Runtime directory, Socket, Token, and audit modes are checked on POSIX.
 - Doctor reports an unavailable optional Broker without weakening fail-closed proxy behavior and rejects insecure Broker permissions or a failed upstream startup probe.
 

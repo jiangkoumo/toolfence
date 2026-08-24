@@ -32,7 +32,8 @@ The npm package is `toolfence-mcp`; the installed command is `toolfence`.
 ```bash
 npm install -g toolfence-mcp
 cd /absolute/path/project
-toolfence policy init
+toolfence policy init --list-recipes
+toolfence policy init --recipe filesystem
 toolfence policy check --policy ./toolfence.yaml
 ```
 
@@ -46,7 +47,7 @@ toolfence wrap \
   -- npx -y @modelcontextprotocol/server-filesystem "$PWD"
 ```
 
-The generated policy is conservative and never replaces an existing file. See the annotated [`examples/policy.yaml`](examples/policy.yaml).
+The generated policy is conservative and never replaces an existing file. Explore pre-tested policy templates in [`examples/recipes/`](examples/recipes/) for Filesystem, GitHub, Fetch, SQLite, PostgreSQL, and Git.
 
 Connect the wrapper to your MCP host with one command:
 
@@ -67,7 +68,8 @@ toolfence host init --host claude-code --write
 
 ## What ToolFence adds
 
-- **Semantic policies:** normalize common Filesystem, Shell, Git, and HTTP tool calls into operations such as `fs.read`, `shell.exec`, `git.write`, and `net.request`, then match paths, exact command arguments, hosts, and HTTP methods.
+- **Semantic policies & recipes:** normalize common Filesystem, Shell, Git, and HTTP tool calls into operations such as `fs.read`, `shell.exec`, `git.write`, and `net.request`. Choose from built-in recipes or customize matches for paths, commands, hosts, and HTTP methods.
+- **Output Secret Redaction (DLP):** automatically detect and redact leaked API keys (OpenAI, Anthropic, GitHub, AWS), JWTs, and private keys from upstream tool outputs before reaching the agent, with zero-leak audit logging.
 - **Deterministic enforcement:** `deny` overrides other matches, multi-resource requests are evaluated as a unit, and unknown or ambiguous actions fail closed.
 - **Human approval:** use an authenticated local Broker for one-time or session decisions; session approvals are bound to the tool Schema and are invalidated when that Schema changes.
 - **Privacy-conscious auditing:** record tool identity, affected resources, policy decisions, and result hashes without storing raw arguments or results.
@@ -170,6 +172,8 @@ Filesystem paths are canonicalized before matching, including existing symbolic 
 
 Supported v0.2 operations are `fs.read`, `fs.write`, `fs.delete`, `shell.exec`, `git.read`, `git.write`, `git.remote`, `net.request`, and `unknown`. Ambiguous Git commands, invalid URLs, and unrecognized tools fail closed through `shell.exec` or `unknown`.
 
+Output secret redaction is enabled by default for successful tool results and JSON-RPC errors. Set `redactSecrets: false` at the top level of a policy only when exact upstream output compatibility is required. Detection is best-effort and covers known token formats, private keys, textual secret assignments, and structured string fields with sensitive names; it does not replace destination controls or process isolation.
+
 ## Policy development
 
 ```bash
@@ -207,7 +211,7 @@ Additional current limitations:
 - stdio transport only
 - local Broker support is POSIX-only; Windows remains non-interactive and fail-closed
 - JSON-RPC batch messages are rejected
-- no output secret redaction yet; raw results are forwarded unchanged
+- output secret detection is best-effort; unrecognized or encoded secret formats may still pass through
 - an HTTP MCP adapter must expose a redirect destination (for example as `redirectUrl`) for ToolFence to re-evaluate it
 
 ## Development

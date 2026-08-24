@@ -17,6 +17,7 @@ export type AuditEvent =
       requestId: JsonRpcId;
       resultHash: string;
       error: boolean;
+      redacted?: boolean;
     };
 
 export type AuditRecord = AuditEvent & { timestamp: string };
@@ -32,6 +33,7 @@ export interface AuditSummary {
   results: {
     total: number;
     errors: number;
+    redacted?: number;
   };
   operations: Record<string, number>;
 }
@@ -92,7 +94,12 @@ function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
     };
   }
   if (value.event === "result") {
-    if (!isRequestId(value.requestId) || typeof value.resultHash !== "string" || typeof value.error !== "boolean") {
+    if (
+      !isRequestId(value.requestId) ||
+      typeof value.resultHash !== "string" ||
+      typeof value.error !== "boolean" ||
+      (value.redacted !== undefined && typeof value.redacted !== "boolean")
+    ) {
       throw new Error(`Invalid result audit record on line ${lineNumber}`);
     }
     return {
@@ -101,6 +108,7 @@ function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
       requestId: value.requestId,
       resultHash: value.resultHash,
       error: value.error,
+      ...(value.redacted !== undefined ? { redacted: value.redacted as boolean } : {}),
     };
   }
   throw new Error(`Unknown audit event on line ${lineNumber}`);
@@ -126,7 +134,7 @@ export function summarizeAudit(records: AuditRecord[]): AuditSummary {
   const summary: AuditSummary = {
     events: records.length,
     decisions: { total: 0, allow: 0, ask: 0, deny: 0 },
-    results: { total: 0, errors: 0 },
+    results: { total: 0, errors: 0, redacted: 0 },
     operations: {},
   };
   for (const record of records) {
@@ -137,6 +145,7 @@ export function summarizeAudit(records: AuditRecord[]): AuditSummary {
     } else {
       summary.results.total += 1;
       if (record.error) summary.results.errors += 1;
+      if (record.redacted) summary.results.redacted = (summary.results.redacted ?? 0) + 1;
     }
   }
   summary.operations = Object.fromEntries(
@@ -167,8 +176,14 @@ export class AuditLogger {
     this.write({ event: "decision", requestId, action: safeAction, decision });
   }
 
-  result(requestId: JsonRpcId, resultHash: string, error: boolean): void {
-    this.write({ event: "result", requestId, resultHash, error });
+  result(requestId: JsonRpcId, resultHash: string, error: boolean, redacted?: boolean): void {
+    this.write({
+      event: "result",
+      requestId,
+      resultHash,
+      error,
+      ...(redacted ? { redacted: true } : {}),
+    });
   }
 
   private write(event: AuditEvent): void {

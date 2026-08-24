@@ -144,4 +144,45 @@ describe("stdio proxy", () => {
     expect(audit).toContain('"effect":"allow"');
     expect(audit).toContain("Approved once by user");
   });
+
+  it("redacts sensitive secrets from tool call output and marks audit record", async () => {
+    const test = harness("allow");
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: "call-secret",
+      method: "tools/call",
+      params: { name: "read_file", arguments: { apiKey: "sk-proj-abcdef1234567890abcdef1234567890" } },
+    })}\n`);
+    const response = await waitForLine(test.output);
+    expect(response.id).toBe("call-secret");
+    const text = (response.result as { content: Array<{ text: string }> }).content[0].text;
+    expect(text).toContain("[REDACTED_SECRET]");
+    expect(text).not.toContain("sk-proj-abcdef");
+    test.input.end();
+    await test.controller.closed;
+
+    const audit = readFileSync(test.auditPath, "utf8");
+    expect(audit).toContain('"redacted":true');
+  });
+
+  it("redacts sensitive secrets from JSON-RPC errors", async () => {
+    const test = harness("allow");
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: "error-secret",
+      method: "tools/call",
+      params: { name: "read_file", arguments: { errorMessage: "password=supersecret123" } },
+    })}\n`);
+    const response = await waitForLine(test.output);
+    expect(response.error).toMatchObject({
+      code: -32000,
+      message: "password=[REDACTED_SECRET]",
+    });
+    test.input.end();
+    await test.controller.closed;
+
+    const audit = readFileSync(test.auditPath, "utf8");
+    expect(audit).toContain('"error":true');
+    expect(audit).toContain('"redacted":true');
+  });
 });

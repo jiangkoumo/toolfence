@@ -26,6 +26,8 @@ export {
 export { canonicalizePath, resourceMatches } from "./paths.js";
 export { PolicyEngine } from "./policy.js";
 export { checkPolicy, explainPolicy, testPolicy } from "./policy-tools.js";
+export { builtInRecipes, getRecipe, listRecipes, type PolicyRecipe } from "./recipes.js";
+export { redactText, redactToolResult, REDACTED_PLACEHOLDER, type RedactionResult } from "./redact.js";
 export { startProxy } from "./proxy.js";
 export { fingerprintToolList, toolSchemaFingerprint } from "./schema.js";
 export type * from "./types.js";

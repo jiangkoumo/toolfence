@@ -1,0 +1,20 @@
+# ToolFence policy for Git MCP server
+version: 1
+default: ask
+
+rules:
+  - id: allow-git-inspection
+    effect: allow
+    operations: [git.read]
+
+  - id: allow-git-safe-status
+    effect: allow
+    operations: [shell.exec]
+    commands:
+      - [git, status]
+      - [git, diff]
+      - [git, log]
+
+  - id: deny-direct-remote-push
+    effect: deny
+    operations: [git.remote]

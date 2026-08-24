@@ -1,0 +1,24 @@
+# ToolFence policy for GitHub MCP server
+version: 1
+default: ask
+
+rules:
+  - id: allow-repo-read
+    effect: allow
+    operations: [git.read, net.request]
+    hosts:
+      - "api.github.com"
+      - "github.com"
+    methods: [GET, HEAD]
+
+  - id: allow-local-git-read
+    effect: allow
+    operations: [git.read]
+
+  - id: ask-git-write
+    effect: ask
+    operations: [git.write]
+
+  - id: deny-uncontrolled-push
+    effect: deny
+    operations: [git.remote]

@@ -22,15 +22,15 @@ describe("audit inspection", () => {
     const logger = new AuditLogger(path);
 
     logger.decision(1, action("fs.read", "read_file"), { effect: "allow", reason: "policy" });
-    logger.result(1, "hash-a", false);
+    logger.result(1, "hash-a", false, true);
     logger.decision(2, action("shell.exec", "execute"), { effect: "deny", reason: "policy" });
-    logger.result(2, "hash-b", true);
+    logger.result(2, "hash-b", true, false);
 
     const records = readAudit(path);
     expect(summarizeAudit(records)).toEqual({
       events: 4,
       decisions: { total: 2, allow: 1, ask: 0, deny: 1 },
-      results: { total: 2, errors: 1 },
+      results: { total: 2, errors: 1, redacted: 1 },
       operations: { "fs.read": 1, "shell.exec": 1 },
     });
     expect(tailAudit(records, 2).map((record) => record.requestId)).toEqual([2, 2]);

@@ -1,0 +1,21 @@
+# ToolFence policy for PostgreSQL MCP server
+version: 1
+default: ask
+
+rules:
+  - id: deny-cloud-metadata
+    effect: deny
+    operations: [net.request]
+    hosts:
+      - "169.254.169.254"
+      - "127.0.0.1"
+      - "localhost"
+
+  - id: protect-host-credentials
+    effect: deny
+    operations: [fs.read, fs.write, fs.delete]
+    resources:
+      - "${home}/.pgpass"
+      - "${home}/.ssh/**"
+      - "**/.env"
+      - "**/.env.*"

@@ -21,10 +21,14 @@ lines.on("line", (line) => {
       result: { tools: [{ name: "read_file", inputSchema: { type: "object" } }] }
     })}\n`);
   } else if (request.method === "tools/call") {
-    process.stdout.write(`${JSON.stringify({
-      jsonrpc: "2.0",
-      id: request.id,
-      result: { content: [{ type: "text", text: JSON.stringify(request.params.arguments) }] }
-    })}\n`);
+    const errorMessage = request.params.arguments?.errorMessage;
+    const response = typeof errorMessage === "string"
+      ? { jsonrpc: "2.0", id: request.id, error: { code: -32000, message: errorMessage } }
+      : {
+          jsonrpc: "2.0",
+          id: request.id,
+          result: { content: [{ type: "text", text: JSON.stringify(request.params.arguments) }] }
+        };
+    process.stdout.write(`${JSON.stringify(response)}\n`);
   }
 });

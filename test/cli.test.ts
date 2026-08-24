@@ -26,6 +26,21 @@ describe("policy init", () => {
     });
   });
 
+  it("creates a policy from a recipe", () => {
+    const root = mkdtempSync(join(tmpdir(), "toolfence-init-"));
+    const policyPath = join(root, "github-policy.yaml");
+
+    expect(initPolicy(policyPath, "github")).toBe(policyPath);
+    const policy = loadPolicy(policyPath);
+    expect(policy.rules.some((r) => r.id === "allow-repo-read")).toBe(true);
+  });
+
+  it("throws for unknown recipes", () => {
+    const root = mkdtempSync(join(tmpdir(), "toolfence-init-"));
+    const policyPath = join(root, "policy.yaml");
+    expect(() => initPolicy(policyPath, "invalid-recipe")).toThrow('Unknown policy recipe "invalid-recipe"');
+  });
+
   it("never overwrites an existing policy", () => {
     const root = mkdtempSync(join(tmpdir(), "toolfence-init-"));
     const policyPath = join(root, "policy.yaml");
@@ -42,13 +57,23 @@ describe("policy init CLI", () => {
     expect(parseCli(["policy", "init"])).toEqual({
       command: "policy-init",
       policy: resolve("toolfence.yaml"),
+      recipe: undefined,
+      listRecipes: false,
     });
   });
 
-  it("accepts a custom policy path and rejects unrelated options", () => {
-    expect(parseCli(["policy", "init", "--policy", "config/policy.yaml"])).toEqual({
+  it("accepts a custom policy path and recipe options", () => {
+    expect(parseCli(["policy", "init", "--policy", "config/policy.yaml", "--recipe", "github"])).toEqual({
       command: "policy-init",
       policy: resolve("config/policy.yaml"),
+      recipe: "github",
+      listRecipes: false,
+    });
+    expect(parseCli(["policy", "init", "--list-recipes"])).toEqual({
+      command: "policy-init",
+      policy: resolve("toolfence.yaml"),
+      recipe: undefined,
+      listRecipes: true,
     });
     expect(() => parseCli(["policy", "init", "--workspace", "."])).toThrow(
       "Unknown option for policy init: --workspace",
@@ -56,6 +81,21 @@ describe("policy init CLI", () => {
     expect(() =>
       parseCli(["policy", "check", "--policy", "policy.yaml", "--cases", "cases.yaml"]),
     ).toThrow("Unknown option for policy check: --cases");
+  });
+
+  it("lists available recipes to stdout", async () => {
+    const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      await runCli(["policy", "init", "--list-recipes"]);
+      const out = String(output.mock.calls.at(-1)?.[0]);
+      expect(out).toContain("Available ToolFence Policy Recipes:");
+      expect(out).toContain("filesystem");
+      expect(out).toContain("github");
+      expect(out).toContain("fetch");
+      expect(out).toContain("sqlite");
+    } finally {
+      output.mockRestore();
+    }
   });
 });
 

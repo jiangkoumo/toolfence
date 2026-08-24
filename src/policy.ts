@@ -69,6 +69,10 @@ export class PolicyEngine {
     };
   }
 
+  get redactSecrets(): boolean {
+    return this.config.redactSecrets !== false;
+  }
+
   evaluate(action: NormalizedAction): Decision {
     const matches = this.config.rules.filter((rule) =>
       ruleMatches(rule, action, this.context),

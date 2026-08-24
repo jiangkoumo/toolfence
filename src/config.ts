@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { getRecipe, listRecipes } from "./recipes.js";
 import { operations, type PolicyConfig } from "./types.js";
 
 const effectSchema = z.enum(["allow", "deny", "ask"]);
@@ -49,6 +50,7 @@ const policySchema = z
   .object({
     version: z.literal(1),
     default: effectSchema.default("ask"),
+    redactSecrets: z.boolean().optional(),
     rules: z.array(ruleSchema).default([]),
   })
   .strict()
@@ -93,11 +95,20 @@ export function loadPolicy(filePath: string): PolicyConfig {
   return policySchema.parse(parseYaml(source)) as PolicyConfig;
 }
 
-export function initPolicy(filePath: string): string {
+export function initPolicy(filePath: string, recipeName?: string): string {
   const absolutePath = resolve(filePath);
+  let policyContent = starterPolicy;
+  if (recipeName) {
+    const recipe = getRecipe(recipeName);
+    if (!recipe) {
+      const available = listRecipes().map((r) => r.name).join(", ");
+      throw new Error(`Unknown policy recipe "${recipeName}". Available recipes: ${available}`);
+    }
+    policyContent = recipe.policy;
+  }
   mkdirSync(dirname(absolutePath), { recursive: true });
   try {
-    writeFileSync(absolutePath, starterPolicy, { encoding: "utf8", flag: "wx" });
+    writeFileSync(absolutePath, policyContent, { encoding: "utf8", flag: "wx" });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") {
       throw new Error(`Policy already exists: ${absolutePath}`);
