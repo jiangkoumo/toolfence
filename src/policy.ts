@@ -80,6 +80,15 @@ export class PolicyEngine {
     const selected = matches.find((rule) => rule.effect === "deny") ?? matches[0];
 
     if (!selected) {
+      const uncertain = action.operation === "unknown" ||
+        action.normalization === "ambiguous" ||
+        action.normalization === "unknown";
+      if (uncertain && this.config.default === "allow") {
+        return {
+          effect: "ask",
+          reason: "Uncertain action cannot inherit default allow; requiring approval",
+        };
+      }
       return {
         effect: this.config.default,
         reason: `No rule matched; using default ${this.config.default}`,

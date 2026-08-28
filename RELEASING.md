@@ -2,25 +2,9 @@
 
 Releases after the initial package creation are published from GitHub Actions with npm trusted publishing. No long-lived npm write token should be added to the repository.
 
-## One-time repository setup
+## Trusted publisher state
 
-1. Confirm the public repository is `https://github.com/jiangkoumo/toolfence` and `repository.url` in `package.json` is its exact `git+https` URL.
-2. Push the repository and confirm every macOS/Linux CI cell passes.
-3. Enable 2FA on the npm maintainer account. A trusted publisher cannot be configured until the package exists.
-4. Run `npm run release:check`, then create `toolfence-mcp@0.2.0` once with an interactive `npm publish` that completes the 2FA challenge.
-5. Using npm 11.15 or newer, bind future releases to GitHub Actions:
-
-   ```bash
-   npm trust github toolfence-mcp \
-     --file publish.yml \
-     --repo jiangkoumo/toolfence \
-     --allow-publish \
-     --yes
-   ```
-
-6. Protect release tags and restrict workflow changes to reviewed pull requests.
-
-The initial interactive publish is the only bootstrap exception. After the trust relationship exists, publish future versions only through `publish.yml`. The workflow safely skips publication when a version already exists, so the `v0.2.0` tag can be pushed after the bootstrap publish without attempting to replace it.
+The one-time npm bootstrap and GitHub Actions trust binding were completed during the v0.2.x release line. Do not repeat the interactive bootstrap publish. Future versions must be published only through `publish.yml`; keep release tags protected and restrict workflow changes to reviewed pull requests.
 
 ## Release checklist
 

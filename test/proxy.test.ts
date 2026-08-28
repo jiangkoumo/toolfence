@@ -10,7 +10,9 @@ import { parsePolicy } from "../src/config.js";
 import { PolicyEngine } from "../src/policy.js";
 import { startProxy } from "../src/proxy.js";
 
-const fixture = join(dirname(fileURLToPath(import.meta.url)), "fixtures/echo-server.mjs");
+const fixtures = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+const fixture = join(fixtures, "echo-server.mjs");
+const trackingFixture = join(fixtures, "tracking-server.mjs");
 
 const neverApprove: ApprovalRequester = { request: async () => false };
 const alwaysApprove: ApprovalRequester = { request: async () => true };
@@ -31,9 +33,34 @@ function waitForLine(output: PassThrough): Promise<Record<string, unknown>> {
   });
 }
 
+function waitForLines(output: PassThrough, count: number): Promise<Array<Record<string, unknown>>> {
+  return new Promise((resolve, reject) => {
+    let buffered = "";
+    const messages: Array<Record<string, unknown>> = [];
+    const timeout = setTimeout(() => reject(new Error("Timed out waiting for proxy output")), 5000);
+    const onData = (chunk: Buffer) => {
+      buffered += chunk.toString("utf8");
+      let newline = buffered.indexOf("\n");
+      while (newline !== -1) {
+        messages.push(JSON.parse(buffered.slice(0, newline)) as Record<string, unknown>);
+        buffered = buffered.slice(newline + 1);
+        if (messages.length === count) {
+          clearTimeout(timeout);
+          output.off("data", onData);
+          resolve(messages);
+          return;
+        }
+        newline = buffered.indexOf("\n");
+      }
+    };
+    output.on("data", onData);
+  });
+}
+
 function harness(
   defaultEffect: "allow" | "deny" | "ask",
   approval: ApprovalRequester = neverApprove,
+  serverFixture = fixture,
 ) {
   const workspace = mkdtempSync(join(tmpdir(), "toolfence-proxy-"));
   const input = new PassThrough();
@@ -46,7 +73,7 @@ function harness(
   );
   const controller = startProxy({
     command: process.execPath,
-    args: [fixture],
+    args: [serverFixture],
     cwd: workspace,
     server: "echo",
     policy,
@@ -126,6 +153,36 @@ describe("stdio proxy", () => {
     expect(audit).toContain("Rejected by user");
   });
 
+  it("requires approval for an unmatched unknown call even when the default allows", async () => {
+    const test = harness("allow");
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: "unknown-default-allow",
+      method: "tools/call",
+      params: { name: "unknown_tool", arguments: {} },
+    })}\n`);
+    const response = await waitForLine(test.output);
+    expect(response.result).toMatchObject({ isError: true });
+    expect(JSON.stringify(response)).toContain("Rejected by user");
+    test.input.end();
+    await test.controller.closed;
+  });
+
+  it("requires approval for a malformed known call even when the default allows", async () => {
+    const test = harness("allow");
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: "malformed-default-allow",
+      method: "tools/call",
+      params: { name: "read_file", arguments: {} },
+    })}\n`);
+    const response = await waitForLine(test.output);
+    expect(response.result).toMatchObject({ isError: true });
+    expect(JSON.stringify(response)).toContain("Rejected by user");
+    test.input.end();
+    await test.controller.closed;
+  });
+
   it("forwards an ask decision after one-time approval", async () => {
     const test = harness("ask", alwaysApprove);
     test.input.write(`${JSON.stringify({
@@ -152,7 +209,7 @@ describe("stdio proxy", () => {
       jsonrpc: "2.0",
       id: "call-secret",
       method: "tools/call",
-      params: { name: "read_file", arguments: { apiKey: sampleApiKey } },
+      params: { name: "read_file", arguments: { path: "README.md", apiKey: sampleApiKey } },
     })}\n`);
     const response = await waitForLine(test.output);
     expect(response.id).toBe("call-secret");
@@ -172,7 +229,10 @@ describe("stdio proxy", () => {
       jsonrpc: "2.0",
       id: "error-secret",
       method: "tools/call",
-      params: { name: "read_file", arguments: { errorMessage: "password=supersecret123" } },
+      params: {
+        name: "read_file",
+        arguments: { path: "README.md", errorMessage: "password=supersecret123" },
+      },
     })}\n`);
     const response = await waitForLine(test.output);
     expect(response.error).toMatchObject({
@@ -185,5 +245,142 @@ describe("stdio proxy", () => {
     const audit = readFileSync(test.auditPath, "utf8");
     expect(audit).toContain('"error":true');
     expect(audit).toContain('"redacted":true');
+  });
+
+  it("rejects a request before upstream execution when tracking capacity is exhausted", async () => {
+    const test = harness("allow", neverApprove, trackingFixture);
+    const responses = waitForLines(test.output, 4);
+
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: "oldest",
+      method: "tools/call",
+      params: { name: "read_file", arguments: { path: "README.md" } },
+    })}\n`);
+    for (let id = 0; id < 2001; id += 1) {
+      test.input.write(`${JSON.stringify({
+        jsonrpc: "2.0",
+        id: `filler-${id}`,
+        method: "test/filler",
+      })}\n`);
+    }
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      method: "test/report-count",
+    })}\n`);
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      method: "test/release-oldest",
+    })}\n`);
+
+    const messages = await responses;
+    for (const id of ["filler-1999", "filler-2000"]) {
+      expect(messages).toContainEqual({
+        jsonrpc: "2.0",
+        id,
+        error: {
+          code: -32000,
+          message: "ToolFence has too many in-flight requests",
+        },
+      });
+    }
+    expect(messages).toContainEqual({
+      jsonrpc: "2.0",
+      method: "test/request-count",
+      params: { count: 2000 },
+    });
+    const oldest = messages.find((message) => message.id === "oldest");
+    const text = (oldest?.result as { content: Array<{ text: string }> }).content[0].text;
+    expect(text).toBe("password=[REDACTED_SECRET]");
+
+    test.input.end();
+    await test.controller.closed;
+
+    const audit = readFileSync(test.auditPath, "utf8");
+    expect(audit).toContain('"requestId":"oldest"');
+    expect(audit).toContain('"event":"result"');
+    expect(audit).toContain('"redacted":true');
+    expect(audit).not.toContain("supersecret123");
+  });
+
+  it("does not let a duplicate non-tool request overwrite tracked tool state", async () => {
+    const test = harness("allow", neverApprove, trackingFixture);
+    const responses = waitForLines(test.output, 2);
+
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: "oldest",
+      method: "tools/call",
+      params: { name: "read_file", arguments: { path: "README.md" } },
+    })}\n`);
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: "oldest",
+      method: "test/filler",
+    })}\n`);
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      method: "test/release-oldest",
+    })}\n`);
+
+    const messages = await responses;
+    expect(messages).toContainEqual({
+      jsonrpc: "2.0",
+      id: "oldest",
+      error: { code: -32600, message: "Duplicate in-flight request id" },
+    });
+    const oldest = messages.find((message) => message.result !== undefined);
+    const text = (oldest?.result as { content: Array<{ text: string }> }).content[0].text;
+    expect(text).toBe("password=[REDACTED_SECRET]");
+
+    test.input.end();
+    await test.controller.closed;
+  });
+
+  it("rejects a cancellation request with an id before it reaches upstream", async () => {
+    const test = harness("allow", neverApprove, trackingFixture);
+    const responses = waitForLines(test.output, 3);
+
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: "oldest",
+      method: "tools/call",
+      params: { name: "read_file", arguments: { path: "README.md" } },
+    })}\n`);
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: "oldest",
+      method: "notifications/cancelled",
+      params: { requestId: "oldest", reason: "user" },
+    })}\n`);
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      method: "test/report-count",
+    })}\n`);
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      method: "test/release-oldest",
+    })}\n`);
+
+    const messages = await responses;
+    expect(messages).toContainEqual({
+      jsonrpc: "2.0",
+      id: "oldest",
+      error: {
+        code: -32600,
+        message: "notifications/cancelled must not include a request id",
+      },
+    });
+    expect(messages).toContainEqual({
+      jsonrpc: "2.0",
+      method: "test/request-count",
+      params: { count: 1 },
+    });
+    const oldest = messages.find((message) => message.result !== undefined);
+    const text = (oldest?.result as { content: Array<{ text: string }> }).content[0].text;
+    expect(text).toBe("password=[REDACTED_SECRET]");
+
+    test.input.end();
+    await test.controller.closed;
   });
 });

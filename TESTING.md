@@ -1,10 +1,10 @@
-# ToolFence v0.2.x Test Strategy
+# ToolFence Test Strategy
 
 The release gate is risk-based: a passing happy path is insufficient unless denial, cancellation, timeout, disconnect, and malformed-input paths are also exercised.
 
 `npm run verify` enforces V8 coverage thresholds, packs the built package, installs it into a clean temporary project, exercises the installed npm binary through its real symlink, validates a generated policy, and imports the public ESM API.
 
-`npm run release:check` is a separate publication gate because it intentionally fails until the final public GitHub repository URL is recorded. It also enforces version, changelog, package entry-point, Git cleanliness, tag, and dual-use disclosure consistency.
+`npm run release:check` is a separate publication gate. It enforces version, changelog, repository, package entry-point, Git cleanliness, tag, and dual-use disclosure consistency.
 
 ## Layers
 
@@ -18,6 +18,7 @@ The release gate is risk-based: a passing happy path is insufficient unless deni
 
 - A deny rule wins over an allow rule.
 - A mixed multi-resource read cannot carry a protected file.
+- Unmatched unknown, ambiguous, or malformed actions require approval even under `default: allow`; explicit matching rules retain their documented effect and deny still takes precedence.
 - Existing and missing paths are canonicalized through existing symlink ancestors.
 - Compound Shell input never matches exact argv authorization.
 - Ambiguous Git input does not become `git.read`.
@@ -27,7 +28,8 @@ The release gate is risk-based: a passing happy path is insufficient unless deni
 - Approval timeout, unavailable Broker, authentication failure, and disconnect fail closed.
 - Session approval keys contain Server, Tool, operation, and Schema fingerprint.
 - Broker and audit records omit raw arguments and raw results.
-- Successful results, structured sensitive fields, and JSON-RPC errors are redacted before forwarding and audit hashing.
+- Tracked successful results, structured sensitive fields, and tracked JSON-RPC errors are redacted before forwarding and audit hashing.
+- Request-tracking capacity tests fill every slot, reject overflow before upstream execution, and prove the oldest tracked result is still redacted and audited. This `v0.3.2` repair closes the gap present in `v0.3.1`; output redaction still must not be treated as the only secret-control boundary.
 - Built-in Fetch policy recipes deny common literal IPv4 and IPv6 local destinations before public read rules are considered.
 - Runtime directory, Socket, Token, and audit modes are checked on POSIX.
 - Doctor reports an unavailable optional Broker without weakening fail-closed proxy behavior and rejects insecure Broker permissions or a failed upstream startup probe.
@@ -42,4 +44,4 @@ npm run verify
 npm audit --omit=dev
 ```
 
-Windows Broker transport is explicitly out of scope for v0.2 and remains fail-closed.
+Windows Broker transport is not implemented in the current release and remains fail-closed. Its security and CI gates are tracked in [`ROADMAP.md`](ROADMAP.md).

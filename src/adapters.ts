@@ -88,6 +88,25 @@ function collectResourceValues(args: Record<string, unknown>): string[] {
   return [...new Set(values)];
 }
 
+function filesystemArgumentsAreKnown(
+  name: string,
+  args: Record<string, unknown>,
+  resources: string[],
+): boolean {
+  const resourceValues = Object.entries(args)
+    .filter(([key]) => resourceKeys.has(key))
+    .map(([, value]) => value);
+  const wellFormed = resourceValues.every((value) =>
+    (typeof value === "string" && value.length > 0) ||
+    (Array.isArray(value) && value.length > 0 &&
+      value.every((item) => typeof item === "string" && item.length > 0)),
+  );
+  if (!wellFormed) return false;
+  if (name === "list_allowed_directories") return true;
+  if (name === "move_file") return resources.length >= 2;
+  return resources.length > 0;
+}
+
 function parseSimpleCommand(command: string): string[] | undefined {
   const trimmed = command.trim();
   if (!trimmed || /[;&|`$<>\\\n\r'\"]/.test(trimmed)) return undefined;
@@ -120,8 +139,15 @@ function normalizeShell(
   }
 
   const gitOperation = argv?.[0] === "git" ? classifyGit(argv.slice(1)) : undefined;
+  const argsAreKnown = args.args === undefined ||
+    (Array.isArray(args.args) && args.args.every((item) => typeof item === "string"));
+  const normalization = argv && argv.length > 0 && argv[0].length > 0 && argsAreKnown &&
+    (argv[0] !== "git" || gitOperation !== undefined)
+    ? "known"
+    : "ambiguous";
   return {
     operation: gitOperation ?? "shell.exec",
+    normalization,
     resources: [],
     server,
     tool,
@@ -171,6 +197,7 @@ function normalizeGit(server: string, tool: string, rawArguments: unknown): Norm
   const operation = argv ? classifyGit(argv.slice(1)) : undefined;
   return {
     operation: operation ?? "unknown",
+    normalization: operation ? "known" : "unknown",
     resources: [],
     server,
     tool,
@@ -187,7 +214,14 @@ function normalizeHttp(server: string, tool: string, rawArguments: unknown): Nor
   // destination is evaluated as a new action instead of inheriting the origin.
   const rawUrl = args.redirectUrl ?? args.redirect_url ?? args.url ?? args.uri ?? args.endpoint;
   if (typeof rawUrl !== "string") {
-    return { operation: "unknown", resources: [], server, tool, rawArguments };
+    return {
+      operation: "unknown",
+      normalization: "unknown",
+      resources: [],
+      server,
+      tool,
+      rawArguments,
+    };
   }
   try {
     const parsed = new URL(rawUrl);
@@ -195,6 +229,9 @@ function normalizeHttp(server: string, tool: string, rawArguments: unknown): Nor
     const method = typeof args.method === "string" ? args.method.toUpperCase() : "GET";
     return {
       operation: "net.request",
+      normalization: args.method === undefined || typeof args.method === "string"
+        ? "known"
+        : "ambiguous",
       resources: [],
       server,
       tool,
@@ -207,7 +244,14 @@ function normalizeHttp(server: string, tool: string, rawArguments: unknown): Nor
       },
     };
   } catch {
-    return { operation: "unknown", resources: [], server, tool, rawArguments };
+    return {
+      operation: "unknown",
+      normalization: "unknown",
+      resources: [],
+      server,
+      tool,
+      rawArguments,
+    };
   }
 }
 
@@ -225,6 +269,7 @@ export function normalizeToolCall(
     );
     return {
       operation: filesystemOperations[name],
+      normalization: filesystemArgumentsAreKnown(name, args, resources) ? "known" : "ambiguous",
       resources,
       server,
       tool,
@@ -241,6 +286,7 @@ export function normalizeToolCall(
 
   return {
     operation: "unknown",
+    normalization: "unknown",
     resources: [],
     server,
     tool,

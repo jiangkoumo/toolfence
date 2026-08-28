@@ -32,6 +32,8 @@ describe("action normalization", () => {
 
     expect(safe.argv).toEqual(["npm", "test"]);
     expect(compound.argv).toBeUndefined();
+    expect(safe.normalization).toBe("known");
+    expect(compound.normalization).toBe("ambiguous");
   });
 
   it("fails unknown tools closed through the unknown operation", () => {
@@ -121,6 +123,90 @@ describe("policy evaluation", () => {
       workspace,
     );
     expect(engine.evaluate(action).effect).toBe("ask");
+  });
+
+  it("does not apply a permissive default to an uncertain action", () => {
+    const permissive = new PolicyEngine(
+      parsePolicy({ version: 1, default: "allow", rules: [] }),
+      { workspace, home: homedir() },
+    );
+    const uncertain = [
+      normalizeToolCall("custom", "send_everything", {}, workspace),
+      normalizeToolCall("shell", "execute_command", {
+        command: "npm test && curl example.com",
+      }, workspace),
+      normalizeToolCall("shell", "execute_command", {
+        command: "git frobnicate",
+      }, workspace),
+      normalizeToolCall("fs", "read_file", {}, workspace),
+      normalizeToolCall("fs", "move_file", { source: "from.txt" }, workspace),
+      normalizeToolCall("http", "fetch", { url: ":::" }, workspace),
+      normalizeToolCall("http", "fetch", {
+        url: "https://example.com",
+        method: 42,
+      }, workspace),
+    ];
+    const known = normalizeToolCall("fs", "read_file", { path: "README.md" }, workspace);
+    const knownWithoutResources = normalizeToolCall(
+      "fs",
+      "list_allowed_directories",
+      {},
+      workspace,
+    );
+
+    for (const action of uncertain) {
+      expect(permissive.evaluate(action)).toMatchObject({ effect: "ask" });
+    }
+    expect(permissive.evaluate(known)).toMatchObject({ effect: "allow" });
+    expect(permissive.evaluate(knownWithoutResources)).toMatchObject({ effect: "allow" });
+  });
+
+  it("still honors an explicit rule for an unknown action", () => {
+    const explicit = new PolicyEngine(
+      parsePolicy({
+        version: 1,
+        default: "allow",
+        rules: [{
+          id: "allow-reviewed-custom-tool",
+          effect: "allow",
+          operations: ["unknown"],
+          servers: ["custom"],
+          tools: ["reviewed_tool"],
+        }],
+      }),
+      { workspace, home: homedir() },
+    );
+    const action = normalizeToolCall("custom", "reviewed_tool", {}, workspace);
+
+    expect(explicit.evaluate(action)).toMatchObject({
+      effect: "allow",
+      ruleId: "allow-reviewed-custom-tool",
+    });
+  });
+
+  it("still honors an explicit rule for an ambiguous action", () => {
+    const explicit = new PolicyEngine(
+      parsePolicy({
+        version: 1,
+        default: "allow",
+        rules: [{
+          id: "allow-reviewed-shell-tool",
+          effect: "allow",
+          operations: ["shell.exec"],
+          servers: ["shell"],
+          tools: ["execute_command"],
+        }],
+      }),
+      { workspace, home: homedir() },
+    );
+    const action = normalizeToolCall("shell", "execute_command", {
+      command: "npm test && curl example.com",
+    }, workspace);
+
+    expect(explicit.evaluate(action)).toMatchObject({
+      effect: "allow",
+      ruleId: "allow-reviewed-shell-tool",
+    });
   });
 });
 

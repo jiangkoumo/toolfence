@@ -12,9 +12,11 @@ export const operations = [
 
 export type Operation = (typeof operations)[number];
 export type Effect = "allow" | "deny" | "ask";
+export type ActionNormalization = "known" | "ambiguous" | "unknown";
 
 export interface NormalizedAction {
   operation: Operation;
+  normalization?: ActionNormalization;
   resources: string[];
   server: string;
   tool: string;

@@ -5,12 +5,12 @@
 [![npm downloads](https://img.shields.io/npm/dm/toolfence-mcp)](https://www.npmjs.com/package/toolfence-mcp)
 [![license](https://img.shields.io/npm/l/toolfence-mcp)](LICENSE)
 
-**A vendor-neutral, fail-closed firewall for MCP tool calls.**
+**A vendor-neutral policy firewall for MCP tool calls.**
 
-ToolFence enforces one testable least-privilege policy between AI agents and stdio MCP servers. Use the same policy from Codex, Cursor, or Claude Desktop: safe calls pass, dangerous calls stop before upstream execution, and uncertain calls require human approval—without changing the MCP host or server.
+ToolFence enforces one testable least-privilege policy between AI agents and stdio MCP servers. With a conservative default (`ask` or `deny`), the same rules can be used from Codex, Cursor, or Claude Desktop: safe calls pass, dangerous or unrecognized calls stop before upstream execution, and uncertain calls require human approval—without changing the MCP host or server.
 
 - **Portable policy:** keep resource and command rules independent of a single Agent platform.
-- **Deterministic enforcement:** normalize tool calls, give `deny` precedence, and fail closed on unknown or ambiguous actions.
+- **Deterministic enforcement:** normalize tool calls, give `deny` precedence, and surface unknown or ambiguous actions for conservative policy handling.
 - **Auditable evidence:** record privacy-conscious decisions and result hashes without storing raw arguments or results.
 
 ## Same MCP call. Different outcome.
@@ -59,18 +59,18 @@ toolfence host init --host codex --write
 toolfence host init --host claude-code --write
 ```
 
-| Host | Copy-ready guide | Quick command |
+| Host | Guide or reference | Quick command |
 | --- | --- | --- |
 | Cursor | [`docs/cursor.md`](docs/cursor.md) | `toolfence host init --host cursor --write` |
 | Claude Desktop | [`docs/claude-desktop.md`](docs/claude-desktop.md) | `toolfence host init --host claude-desktop --write` |
 | Codex | [`docs/codex.md`](docs/codex.md) | `toolfence host init --host codex --write` |
-| Claude Code | [`docs/claude-desktop.md`](docs/claude-desktop.md) | `toolfence host init --host claude-code --write` |
+| Claude Code | [Claude Code MCP reference](https://docs.anthropic.com/en/docs/claude-code/mcp) | `toolfence host init --host claude-code --write` |
 
 ## What ToolFence adds
 
 - **Semantic policies & recipes:** normalize common Filesystem, Shell, Git, and HTTP tool calls into operations such as `fs.read`, `shell.exec`, `git.write`, and `net.request`. Choose from built-in recipes or customize matches for paths, commands, hosts, and HTTP methods.
-- **Output Secret Redaction (DLP):** automatically detect and redact leaked API keys (OpenAI, Anthropic, GitHub, AWS), JWTs, and private keys from upstream tool outputs before reaching the agent, with zero-leak audit logging.
-- **Deterministic enforcement:** `deny` overrides other matches, multi-resource requests are evaluated as a unit, and unknown or ambiguous actions fail closed.
+- **Output Secret Redaction (DLP):** automatically detect and redact leaked API keys (OpenAI, Anthropic, GitHub, AWS), JWTs, and private keys from tracked upstream tool outputs before reaching the agent, without intentionally recording raw payloads in the audit log.
+- **Deterministic enforcement:** `deny` overrides other matches, multi-resource requests are evaluated as a unit, and unknown or ambiguous actions normalize conservatively for policy evaluation.
 - **Human approval:** use an authenticated local Broker for one-time or session decisions; session approvals are bound to the tool Schema and are invalidated when that Schema changes.
 - **Privacy-conscious auditing:** record tool identity, affected resources, policy decisions, and result hashes without storing raw arguments or results.
 - **Policies you can test:** generate, validate, explain, and regression-test YAML policies from the CLI.
@@ -89,7 +89,7 @@ ToolFence is designed to complement host approvals and OS isolation. It is not a
 
 ## Status
 
-Version 0.3.1 provides built-in policy recipes, default-on output secret redaction, scriptable approvals, audit inspection and diagnostic commands, copy-ready MCP Host configuration, enforced test coverage, and npm trusted publishing provenance.
+Version 0.3.2 provides conservative handling for uncertain actions, fail-closed request-tracking capacity, built-in policy recipes, default-on output secret redaction, scriptable approvals, audit inspection and diagnostic commands, copy-ready MCP Host configuration, enforced test coverage, and npm trusted publishing provenance.
 
 ToolFence is **not a sandbox for a malicious MCP server process**: the upstream process still runs with the current user's operating-system permissions.
 
@@ -168,11 +168,13 @@ Rules are evaluated deterministically:
 
 Allow and ask resource rules require every requested resource to match, so a multi-file call cannot use one allowed path to carry an unauthorized path.
 
-Filesystem paths are canonicalized before matching, including existing symbolic links. Exact argv matching is used for allowed commands; compound or quoted shell strings are not treated as safe argv and fall back to the default decision.
+Filesystem paths are canonicalized before matching, including existing symbolic links. Exact argv matching is used for allowed commands; compound or quoted shell strings are not treated as safe argv and, without an explicit matching rule, require approval instead of inheriting `default: allow`.
 
-Supported v0.2 operations are `fs.read`, `fs.write`, `fs.delete`, `shell.exec`, `git.read`, `git.write`, `git.remote`, `net.request`, and `unknown`. Ambiguous Git commands, invalid URLs, and unrecognized tools fail closed through `shell.exec` or `unknown`.
+Current operations are `fs.read`, `fs.write`, `fs.delete`, `shell.exec`, `git.read`, `git.write`, `git.remote`, `net.request`, and `unknown`. Ambiguous Git commands, invalid URLs, and unrecognized tools fall back through `shell.exec` or `unknown` instead of being treated as a known safe action.
 
-Output secret redaction is enabled by default for successful tool results and JSON-RPC errors. Set `redactSecrets: false` at the top level of a policy only when exact upstream output compatibility is required. Detection is best-effort and covers known token formats, private keys, textual secret assignments, and structured string fields with sensitive names; it does not replace destination controls or process isolation.
+As of `v0.3.2`, an unmatched unknown, ambiguous, or malformed action requires approval instead of inheriting `default: allow`, while an explicit matching rule can still authorize it. Users remaining on `v0.3.1` should use `ask` or `deny` as their default.
+
+Output secret redaction is enabled by default for tracked tool results, including successful results and JSON-RPC errors. Set `redactSecrets: false` at the top level of a policy only when exact upstream output compatibility is required. Detection is best-effort and covers known token formats, private keys, textual secret assignments, and structured string fields with sensitive names; it does not replace destination controls or process isolation.
 
 ## Policy development
 
@@ -204,7 +206,7 @@ toolfence audit tail --audit /path/to/audit.jsonl --lines 50 --json
 
 ## Security boundary
 
-ToolFence v0.2 reduces accidental or prompt-injected tool misuse when the tool call crosses this proxy. It does not prevent the upstream server process from directly reading files, environment variables, or the network. Process isolation, environment filtering, and network controls belong to a later sandbox phase.
+ToolFence reduces accidental or prompt-injected tool misuse when the tool call crosses its stdio proxy. It does not prevent the upstream server process from directly reading files, environment variables, or the network. Process isolation, environment filtering, and network controls require a separate sandbox layer.
 
 Additional current limitations:
 
@@ -216,7 +218,7 @@ Additional current limitations:
 
 ## Development
 
-The architecture, threat model, security invariants, and v0.2 implementation plan are maintained in the [development guide](DEVELOPMENT.md). Current product priorities and good first contribution candidates are in the [roadmap](ROADMAP.md).
+The architecture, threat model, historical implementation baselines, and current release gates are maintained in the [development guide](DEVELOPMENT.md). Public priorities and good first contribution candidates are in the [roadmap](ROADMAP.md).
 
 ```bash
 npm run typecheck

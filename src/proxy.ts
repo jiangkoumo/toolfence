@@ -48,6 +48,8 @@ interface ForwardedRequest {
   action?: NormalizedAction;
 }
 
+const MAX_IN_FLIGHT_REQUESTS = 2_000;
+
 function requestKey(id: JsonRpcId): string {
   return `${typeof id}:${String(id)}`;
 }
@@ -93,7 +95,7 @@ function parseErrorResponse(): string {
   return rpcError(null, -32700, "ToolFence could not parse the JSON-RPC message");
 }
 
-function invalidRequestResponse(message = "ToolFence v0.2 does not accept JSON-RPC batches"): string {
+function invalidRequestResponse(message = "ToolFence does not accept JSON-RPC batches"): string {
   return rpcError(null, -32600, message);
 }
 
@@ -229,11 +231,16 @@ export function startProxy(options: ProxyOptions): ProxyController {
 
   function forward(line: string, request?: JsonRpcRequest, action?: NormalizedAction): void {
     if (request?.id !== undefined) {
-      if (forwarded.size > 2000) {
-        const oldestKey = forwarded.keys().next().value;
-        if (oldestKey) forwarded.delete(oldestKey);
+      const key = requestKey(request.id);
+      if (awaiting.has(key) || forwarded.has(key)) {
+        writeOutput(rpcError(request.id, -32600, "Duplicate in-flight request id"));
+        return;
       }
-      forwarded.set(requestKey(request.id), { id: request.id, method: request.method, action });
+      if (forwarded.size >= MAX_IN_FLIGHT_REQUESTS) {
+        writeOutput(rpcError(request.id, -32000, "ToolFence has too many in-flight requests"));
+        return;
+      }
+      forwarded.set(key, { id: request.id, method: request.method, action });
     }
     try {
       child.stdin.write(`${line}\n`);
@@ -262,6 +269,14 @@ export function startProxy(options: ProxyOptions): ProxyController {
     }
 
     if (message.method === "notifications/cancelled") {
+      if (message.id !== undefined) {
+        writeOutput(rpcError(
+          message.id,
+          -32600,
+          "notifications/cancelled must not include a request id",
+        ));
+        return;
+      }
       const requestId = cancelledRequestId(message.params);
       if (requestId !== undefined) {
         const key = requestKey(requestId);

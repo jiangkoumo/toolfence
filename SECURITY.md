@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes are provided for the latest published 0.2.x release. Users should upgrade to the newest patch before reporting an issue that may already be fixed.
+Security fixes are provided for the latest published ToolFence release. Users should upgrade to the newest patch before reporting an issue that may already be fixed; older pre-1.0 minor lines do not receive parallel security maintenance unless a release notice explicitly says otherwise.
 
 ## Reporting a vulnerability
 

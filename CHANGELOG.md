@@ -2,6 +2,15 @@
 
 All notable changes to ToolFence are documented here. The project follows Semantic Versioning.
 
+## [Unreleased]
+
+## [0.3.2] - 2026-08-28
+
+### Security
+
+- Prevented uncertain or malformed tool actions from inheriting `default: allow` unless an explicit rule matches; they now require approval.
+- Replaced in-flight request tracking eviction with fail-closed capacity errors and rejected duplicate IDs before they can overwrite result-redaction and audit correlation state.
+
 ## [0.3.1] - 2026-08-24
 
 Release reliability follow-up for v0.3.0.
