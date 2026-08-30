@@ -40,6 +40,82 @@ describe("action normalization", () => {
     const action = normalizeToolCall("custom", "send_everything", {}, "/tmp");
     expect(action.operation).toBe("unknown");
   });
+
+  it.each([
+    ["list_tapes", {}],
+    ["inspect_tape", { id: "tape_capture" }],
+    ["fork_run", {
+      id: "tape_capture",
+      boundarySequence: 1,
+      injection: "timeout",
+    }],
+  ])("normalizes AgentTape %s as a tape-store read", (tool, arguments_) => {
+    const workspace = mkdtempSync(join(tmpdir(), "toolfence-agenttape-"));
+    const action = normalizeToolCall(
+      "agenttape_fenced",
+      tool,
+      { ...arguments_, workspaceRoot: workspace },
+      "/unrelated-workspace",
+    );
+
+    expect(action).toMatchObject({ operation: "fs.read", normalization: "known" });
+    expect(action.resources).toEqual([
+      join(realpathSync.native(workspace), ".agent-tape", "tapes"),
+    ]);
+  });
+
+  it("scopes AgentTape regression writes to the requested filename", () => {
+    const workspace = mkdtempSync(join(tmpdir(), "toolfence-agenttape-"));
+    const action = normalizeToolCall(
+      "agenttape_fenced",
+      "save_regression",
+      {
+        workspaceRoot: workspace,
+        filename: "permission-timeout.tape",
+        path: "/must-not-be-treated-as-the-output-path",
+      },
+      "/unrelated-workspace",
+    );
+
+    expect(action).toMatchObject({ operation: "fs.write", normalization: "known" });
+    expect(action.resources).toEqual([
+      join(realpathSync.native(workspace), "tests", "agenttape", "permission-timeout.tape"),
+    ]);
+  });
+
+  it("keeps AgentTape-specific names scoped and ambiguous outputs fail closed", () => {
+    const workspace = mkdtempSync(join(tmpdir(), "toolfence-agenttape-"));
+    const collision = normalizeToolCall(
+      "custom",
+      "save_regression",
+      { workspaceRoot: workspace, filename: "reviewed.tape" },
+      workspace,
+    );
+    const unknownAgentTapeTool = normalizeToolCall(
+      "agenttape_fenced",
+      "delete_tape",
+      {},
+      workspace,
+    );
+    const generatedFilename = normalizeToolCall(
+      "agenttape_fenced",
+      "save_regression",
+      { workspaceRoot: workspace, path: "/must-not-be-treated-as-the-output-path" },
+      workspace,
+    );
+
+    expect(collision).toMatchObject({ operation: "unknown", normalization: "unknown", resources: [] });
+    expect(unknownAgentTapeTool).toMatchObject({
+      operation: "unknown",
+      normalization: "unknown",
+      resources: [],
+    });
+    expect(generatedFilename).toMatchObject({
+      operation: "fs.write",
+      normalization: "ambiguous",
+      resources: [],
+    });
+  });
 });
 
 describe("path canonicalization", () => {

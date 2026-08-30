@@ -221,6 +221,43 @@ describe("real MCP integrations", () => {
     }
   });
 
+  it("audits MCP tool results with isError as errors", async () => {
+    const listener = createServer();
+    await new Promise<void>((resolve) => listener.listen(0, "127.0.0.1", resolve));
+    const address = listener.address();
+    if (!address || typeof address === "string") throw new Error("missing HTTP address");
+    await new Promise<void>((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()));
+
+    const root = mkdtempSync(join(tmpdir(), "toolfence-http-failure-integration-"));
+    const harness = startHarness({
+      workspace: root,
+      args: [actionFixture, "http"],
+      server: "http-failure",
+      policy: {
+        version: 1,
+        default: "deny",
+        rules: [{
+          id: "allow-local-get",
+          effect: "allow",
+          operations: ["net.request"],
+          hosts: ["127.0.0.1"],
+          methods: ["GET"],
+        }],
+      },
+    });
+
+    const response = await request(harness, 1, "tools/call", {
+      name: "http_request",
+      arguments: { url: `http://127.0.0.1:${address.port}/unavailable`, method: "GET" },
+    });
+    expect(response.result.isError).toBe(true);
+    const audit = readFileSync(join(root, "http-failure-audit.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(audit.at(-1)).toMatchObject({ event: "result", requestId: 1, error: true });
+  });
+
   it("classifies real Git repository reads, writes, and remote mutations", async () => {
     const root = mkdtempSync(join(tmpdir(), "toolfence-git-integration-"));
     execFileSync("git", ["init", "-q"], { cwd: root });

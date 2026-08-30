@@ -1,6 +1,20 @@
 import { appendFileSync, chmodSync, closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import type { ApprovalResolution } from "./approval.js";
 import { operations, type Decision, type JsonRpcId, type NormalizedAction } from "./types.js";
+
+export type AuditDispatch = "forwarded" | "not-forwarded";
+
+export interface AuditCorrelation {
+  proxyRunId?: string;
+  clientSessionId?: string;
+}
+
+export interface AuditDecisionContext extends AuditCorrelation {
+  approvalId?: string;
+  resolution?: ApprovalResolution;
+  dispatch?: AuditDispatch;
+}
 
 export type AuditEvent =
   | {
@@ -11,14 +25,14 @@ export type AuditEvent =
         "operation" | "resources" | "server" | "tool" | "executable"
       >;
       decision: Decision;
-    }
+    } & AuditDecisionContext
   | {
       event: "result";
       requestId: JsonRpcId;
       resultHash: string;
       error: boolean;
       redacted?: boolean;
-    };
+    } & AuditCorrelation;
 
 export type AuditRecord = AuditEvent & { timestamp: string };
 
@@ -46,6 +60,27 @@ function isRequestId(value: unknown): value is JsonRpcId {
   return value === null || typeof value === "string" || typeof value === "number";
 }
 
+function isApprovalResolution(value: unknown): value is ApprovalResolution {
+  return value === "allow-once" || value === "allow-session" || value === "deny";
+}
+
+function isAuditDispatch(value: unknown): value is AuditDispatch {
+  return value === "forwarded" || value === "not-forwarded";
+}
+
+function parseAuditCorrelation(value: Record<string, unknown>, lineNumber: number): AuditCorrelation {
+  if (
+    (value.proxyRunId !== undefined && typeof value.proxyRunId !== "string") ||
+    (value.clientSessionId !== undefined && typeof value.clientSessionId !== "string")
+  ) {
+    throw new Error(`Invalid audit record on line ${lineNumber}`);
+  }
+  return {
+    ...(value.proxyRunId !== undefined ? { proxyRunId: value.proxyRunId as string } : {}),
+    ...(value.clientSessionId !== undefined ? { clientSessionId: value.clientSessionId as string } : {}),
+  };
+}
+
 function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
   let value: unknown;
   try {
@@ -57,6 +92,7 @@ function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
     throw new Error(`Invalid audit record on line ${lineNumber}`);
   }
   if (value.event === "decision") {
+    const correlation = parseAuditCorrelation(value, lineNumber);
     if (!isRecord(value.action) || !isRecord(value.decision)) {
       throw new Error(`Invalid decision audit record on line ${lineNumber}`);
     }
@@ -71,7 +107,10 @@ function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
       (value.action.executable !== undefined && typeof value.action.executable !== "string") ||
       (effect !== "allow" && effect !== "ask" && effect !== "deny") ||
       typeof value.decision.reason !== "string" ||
-      (value.decision.ruleId !== undefined && typeof value.decision.ruleId !== "string")
+      (value.decision.ruleId !== undefined && typeof value.decision.ruleId !== "string") ||
+      (value.approvalId !== undefined && typeof value.approvalId !== "string") ||
+      (value.resolution !== undefined && !isApprovalResolution(value.resolution)) ||
+      (value.dispatch !== undefined && !isAuditDispatch(value.dispatch))
     ) {
       throw new Error(`Invalid decision audit record on line ${lineNumber}`);
     }
@@ -91,9 +130,14 @@ function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
         reason: value.decision.reason,
         ruleId: value.decision.ruleId as string | undefined,
       },
+      ...correlation,
+      ...(value.approvalId !== undefined ? { approvalId: value.approvalId as string } : {}),
+      ...(value.resolution !== undefined ? { resolution: value.resolution as ApprovalResolution } : {}),
+      ...(value.dispatch !== undefined ? { dispatch: value.dispatch as AuditDispatch } : {}),
     };
   }
   if (value.event === "result") {
+    const correlation = parseAuditCorrelation(value, lineNumber);
     if (
       !isRequestId(value.requestId) ||
       typeof value.resultHash !== "string" ||
@@ -109,6 +153,7 @@ function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
       resultHash: value.resultHash,
       error: value.error,
       ...(value.redacted !== undefined ? { redacted: value.redacted as boolean } : {}),
+      ...correlation,
     };
   }
   throw new Error(`Unknown audit event on line ${lineNumber}`);
@@ -165,7 +210,12 @@ export class AuditLogger {
     if (process.platform !== "win32") chmodSync(this.path, 0o600);
   }
 
-  decision(requestId: JsonRpcId, action: NormalizedAction, decision: Decision): void {
+  decision(
+    requestId: JsonRpcId,
+    action: NormalizedAction,
+    decision: Decision,
+    context?: AuditDecisionContext,
+  ): void {
     const safeAction = {
       operation: action.operation,
       resources: action.resources,
@@ -173,16 +223,23 @@ export class AuditLogger {
       tool: action.tool,
       executable: action.executable,
     };
-    this.write({ event: "decision", requestId, action: safeAction, decision });
+    this.write({ event: "decision", requestId, action: safeAction, decision, ...context });
   }
 
-  result(requestId: JsonRpcId, resultHash: string, error: boolean, redacted?: boolean): void {
+  result(
+    requestId: JsonRpcId,
+    resultHash: string,
+    error: boolean,
+    redacted?: boolean,
+    correlation?: AuditCorrelation,
+  ): void {
     this.write({
       event: "result",
       requestId,
       resultHash,
       error,
       ...(redacted ? { redacted: true } : {}),
+      ...correlation,
     });
   }
 

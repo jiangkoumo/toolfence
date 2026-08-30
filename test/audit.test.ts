@@ -46,6 +46,34 @@ describe("audit inspection", () => {
     expect(() => tailAudit([], 10_001)).toThrow("Audit tail limit must be between 1 and 10000");
   });
 
+  it("retains approval resolution and dispatch evidence with request correlations", () => {
+    const root = mkdtempSync(join(tmpdir(), "toolfence-audit-inspect-"));
+    const path = join(root, "audit.jsonl");
+    const logger = new AuditLogger(path);
+    const correlation = { proxyRunId: "proxy-run-1", clientSessionId: "client-session-1" };
+
+    logger.decision(1, action("fs.read", "read_file"), {
+      effect: "allow",
+      reason: "Approved for this session by user",
+    }, {
+      ...correlation,
+      approvalId: "approval-1",
+      resolution: "allow-session",
+      dispatch: "forwarded",
+    });
+    logger.result(1, "hash-a", false, false, correlation);
+
+    const [decision, result] = readAudit(path);
+    expect(decision).toMatchObject({
+      event: "decision",
+      ...correlation,
+      approvalId: "approval-1",
+      resolution: "allow-session",
+      dispatch: "forwarded",
+    });
+    expect(result).toMatchObject({ event: "result", ...correlation });
+  });
+
   it("returns only the documented privacy-safe fields", () => {
     const root = mkdtempSync(join(tmpdir(), "toolfence-audit-inspect-"));
     const path = join(root, "audit.jsonl");

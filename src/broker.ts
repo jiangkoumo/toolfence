@@ -12,12 +12,17 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import { createInterface } from "node:readline";
-import type { ApprovalContext, ApprovalRequester } from "./approval.js";
+import type {
+  ApprovalContext,
+  ApprovalOutcome,
+  ApprovalRequester,
+  ApprovalResolution,
+} from "./approval.js";
 import type { Decision, JsonRpcId, NormalizedAction } from "./types.js";
 import { operations } from "./types.js";
 
 export const brokerProtocolVersion = 1;
-export type BrokerDecision = "allow-once" | "allow-session" | "deny";
+export type BrokerDecision = ApprovalResolution;
 export type BrokerCancelReason = "client-cancelled" | "timeout" | "proxy-closed";
 
 export interface BrokerPaths {
@@ -82,7 +87,14 @@ async function socketIsLive(socketPath: string): Promise<boolean> {
 }
 
 function send(socket: Socket, message: unknown): void {
-  socket.write(`${JSON.stringify(message)}\n`);
+  if (socket.destroyed || !socket.writable) return;
+  try {
+    socket.write(`${JSON.stringify(message)}\n`, (error) => {
+      if (error && !socket.destroyed) socket.destroy();
+    });
+  } catch {
+    socket.destroy();
+  }
 }
 
 function safeAction(action: NormalizedAction): Omit<NormalizedAction, "rawArguments"> {
@@ -169,6 +181,7 @@ export async function startBroker(paths = defaultBrokerPaths()): Promise<BrokerC
   const server = createServer((rawSocket) => {
     const socket = rawSocket as AuthenticatedSocket;
     clients.add(socket);
+    socket.on("error", () => undefined);
     const lines = createInterface({ input: socket, crlfDelay: Infinity });
     lines.on("line", (line) => {
       let message: Record<string, unknown>;
@@ -324,7 +337,7 @@ async function connectAuthenticated(
 }
 
 export class BrokerApprovalRequester implements ApprovalRequester {
-  private readonly grants = new Set<string>();
+  private readonly grants = new Map<string, string>();
   private readonly fingerprints = new Map<string, string>();
   private readonly active = new Map<string, { socket: Socket; approvalId: string }>();
 
@@ -338,60 +351,91 @@ export class BrokerApprovalRequester implements ApprovalRequester {
     const previous = this.fingerprints.get(id);
     this.fingerprints.set(id, fingerprint);
     if (previous && previous !== fingerprint) {
-      for (const grant of this.grants) if (grant.startsWith(`${id}\0`)) this.grants.delete(grant);
+      for (const grant of this.grants.keys()) {
+        if (grant.startsWith(`${id}\0`)) this.grants.delete(grant);
+      }
     }
   }
 
   async request(action: NormalizedAction, decision: Decision, context?: ApprovalContext): Promise<boolean> {
-    if (!context || context.signal?.aborted) return false;
+    return (await this.requestWithOutcome(action, decision, context)).approved;
+  }
+
+  async requestWithOutcome(
+    action: NormalizedAction,
+    decision: Decision,
+    context?: ApprovalContext,
+  ): Promise<ApprovalOutcome> {
+    if (!context || context.signal?.aborted) {
+      return { approved: false, approvalId: context?.approvalId, resolution: "deny" };
+    }
     const fingerprint = context.schemaFingerprint ?? "unknown";
     const grantKey = `${action.server}\0${action.tool}\0${action.operation}\0${fingerprint}`;
-    if (this.grants.has(grantKey)) return true;
+    const grantApprovalId = this.grants.get(grantKey);
+    if (grantApprovalId !== undefined) {
+      return {
+        approved: true,
+        approvalId: grantApprovalId,
+        resolution: "allow-session",
+      };
+    }
 
     let socket: Socket;
     try {
       socket = await connectAuthenticated("proxy", this.paths);
     } catch {
-      return false;
+      return { approved: false, approvalId: context.approvalId, resolution: "deny" };
     }
-    const approvalId = randomUUID();
+    if (context.signal?.aborted) {
+      socket.destroy();
+      return { approved: false, approvalId: context.approvalId, resolution: "deny" };
+    }
+    const approvalId = context.approvalId ?? randomUUID();
     const requestKey = `${typeof context.requestId}:${String(context.requestId)}`;
     this.active.set(requestKey, { socket, approvalId });
     const expiresAt = new Date(Date.now() + this.timeoutMs).toISOString();
 
-    return await new Promise<boolean>((resolve) => {
+    return await new Promise<ApprovalOutcome>((resolve) => {
       let settled = false;
-      const finish = (allowed: boolean) => {
+      const finish = (outcome: ApprovalOutcome) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
         context.signal?.removeEventListener("abort", onAbort);
         this.active.delete(requestKey);
         socket.destroy();
-        resolve(allowed);
+        resolve(outcome);
       };
       const cancel = (reason: BrokerCancelReason) => {
         send(socket, { type: "approval.cancel", protocolVersion: 1, approvalId, reason });
-        finish(false);
+        finish({ approved: false, approvalId, resolution: "deny" });
       };
       const onAbort = () => cancel("client-cancelled");
       const timer = setTimeout(() => cancel("timeout"), this.timeoutMs);
       context.signal?.addEventListener("abort", onAbort, { once: true });
+      if (context.signal?.aborted) {
+        onAbort();
+        return;
+      }
       const lines = createInterface({ input: socket, crlfDelay: Infinity });
       lines.on("line", (line) => {
         let message: { type?: string; approvalId?: string; decision?: BrokerDecision };
         try {
           message = JSON.parse(line) as typeof message;
         } catch {
-          finish(false);
+          finish({ approved: false, approvalId, resolution: "deny" });
           return;
         }
         if (message.type !== "approval.resolve" || message.approvalId !== approvalId) return;
-        if (message.decision === "allow-session") this.grants.add(grantKey);
-        finish(message.decision === "allow-once" || message.decision === "allow-session");
+        if (message.decision === "allow-session") this.grants.set(grantKey, approvalId);
+        finish({
+          approved: message.decision === "allow-once" || message.decision === "allow-session",
+          approvalId,
+          resolution: message.decision ?? "deny",
+        });
       });
-      socket.once("close", () => finish(false));
-      socket.once("error", () => finish(false));
+      socket.once("close", () => finish({ approved: false, approvalId, resolution: "deny" }));
+      socket.once("error", () => finish({ approved: false, approvalId, resolution: "deny" }));
       send(socket, {
         type: "approval.request",
         protocolVersion: 1,

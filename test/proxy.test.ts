@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import type { ApprovalRequester } from "../src/approval.js";
-import { AuditLogger } from "../src/audit.js";
+import { AuditLogger, readAudit } from "../src/audit.js";
 import { parsePolicy } from "../src/config.js";
 import { PolicyEngine } from "../src/policy.js";
 import { startProxy } from "../src/proxy.js";
@@ -98,7 +98,7 @@ describe("stdio proxy", () => {
   });
 
   it("returns an MCP tool error without forwarding a denied call", async () => {
-    const test = harness("deny");
+    const test = harness("deny", neverApprove, trackingFixture);
     test.input.write(`${JSON.stringify({
       jsonrpc: "2.0",
       id: 2,
@@ -108,12 +108,26 @@ describe("stdio proxy", () => {
     const response = await waitForLine(test.output);
     expect(response.id).toBe(2);
     expect(response.result).toMatchObject({ isError: true });
+
+    const count = waitForLine(test.output);
+    test.input.write(`${JSON.stringify({ jsonrpc: "2.0", method: "test/report-count" })}\n`);
+    expect(await count).toMatchObject({
+      method: "test/request-count",
+      params: { count: 0 },
+    });
     test.input.end();
     await test.controller.closed;
 
-    const audit = readFileSync(test.auditPath, "utf8");
-    expect(audit).toContain('"event":"decision"');
-    expect(audit).not.toContain("rawArguments");
+    const audit = readAudit(test.auditPath);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      event: "decision",
+      requestId: 2,
+      dispatch: "not-forwarded",
+      proxyRunId: expect.any(String),
+      clientSessionId: expect.any(String),
+    });
+    expect(JSON.stringify(audit)).not.toContain("rawArguments");
   });
 
   it("forwards allowed calls and records a result hash", async () => {
@@ -136,7 +150,7 @@ describe("stdio proxy", () => {
   });
 
   it("fails ask closed when approval is rejected", async () => {
-    const test = harness("ask");
+    const test = harness("ask", neverApprove, trackingFixture);
     test.input.write(`${JSON.stringify({
       jsonrpc: "2.0",
       id: 3,
@@ -145,12 +159,24 @@ describe("stdio proxy", () => {
     })}\n`);
     const response = await waitForLine(test.output);
     expect(response.result).toMatchObject({ isError: true });
+
+    const count = waitForLine(test.output);
+    test.input.write(`${JSON.stringify({ jsonrpc: "2.0", method: "test/report-count" })}\n`);
+    expect(await count).toMatchObject({
+      method: "test/request-count",
+      params: { count: 0 },
+    });
     test.input.end();
     await test.controller.closed;
 
-    const audit = readFileSync(test.auditPath, "utf8");
-    expect(audit).toContain('"effect":"deny"');
-    expect(audit).toContain("Rejected by user");
+    expect(readAudit(test.auditPath)[0]).toMatchObject({
+      event: "decision",
+      requestId: 3,
+      approvalId: expect.any(String),
+      resolution: "deny",
+      dispatch: "not-forwarded",
+      decision: { effect: "deny", reason: "Rejected by user" },
+    });
   });
 
   it("requires approval for an unmatched unknown call even when the default allows", async () => {
@@ -200,6 +226,47 @@ describe("stdio proxy", () => {
     const audit = readFileSync(test.auditPath, "utf8");
     expect(audit).toContain('"effect":"allow"');
     expect(audit).toContain("Approved once by user");
+    expect(readAudit(test.auditPath)[0]).toMatchObject({
+      approvalId: expect.any(String),
+      resolution: "allow-once",
+    });
+    expect(readAudit(test.auditPath)[0]).not.toHaveProperty("dispatch");
+  });
+
+  it("records a session approval without mislabeling it as one-time", async () => {
+    const approval: ApprovalRequester = {
+      request: async () => true,
+      requestWithOutcome: async (_action, _decision, context) => ({
+        approved: true,
+        approvalId: context?.approvalId,
+        resolution: "allow-session",
+      }),
+    };
+    const test = harness("ask", approval);
+    test.input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: "session-approval",
+      method: "tools/call",
+      params: { name: "unknown_tool", arguments: { value: "ok" } },
+    })}\n`);
+    const response = await waitForLine(test.output);
+    expect(response.id).toBe("session-approval");
+    test.input.end();
+    await test.controller.closed;
+
+    const [decision, result] = readAudit(test.auditPath);
+    expect(decision).toMatchObject({
+      event: "decision",
+      approvalId: expect.any(String),
+      resolution: "allow-session",
+      decision: { reason: "Approved for this session by user" },
+    });
+    expect(decision).not.toHaveProperty("dispatch");
+    expect(result).toMatchObject({
+      event: "result",
+      proxyRunId: (decision as { proxyRunId?: string }).proxyRunId,
+      clientSessionId: (decision as { clientSessionId?: string }).clientSessionId,
+    });
   });
 
   it("redacts sensitive secrets from tool call output and marks audit record", async () => {

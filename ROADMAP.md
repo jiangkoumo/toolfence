@@ -1,6 +1,6 @@
 # ToolFence roadmap
 
-Last reviewed: 2026-08-28. Current release: `v0.3.2`.
+Last reviewed: 2026-08-30. Current release: `v0.3.3`.
 
 ToolFence is an early-stage security project. This roadmap communicates priorities and release gates, not dates. Security invariants, fail-closed behavior, and evidence-backed compatibility claims take precedence over feature count.
 
@@ -17,14 +17,16 @@ The next releases are ordered around four observations:
 
 Planning inputs include the [MCP `2026-07-28` release](https://blog.modelcontextprotocol.io/posts/2026-07-28/), the [current MCP transport specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports), and the [August 2026 MCP roadmap](https://blog.modelcontextprotocol.io/posts/mcp-roadmap/).
 
-## Shipped baseline: v0.3.2
+## Shipped baseline: v0.3.3
 
 The current release includes:
 
 - deterministic `allow`, `ask`, and `deny` policy evaluation with conservative Filesystem, Shell, Git, and HTTP normalization;
 - uncertain or malformed actions require approval instead of inheriting `default: allow`, unless an explicit matching rule authorizes them;
 - in-flight request tracking fails closed at capacity, rejects duplicate IDs, and preserves accepted tool-result redaction and audit correlation until terminal response;
-- authenticated POSIX approval Broker, one-time and session decisions, cancellation, timeout, and Schema-fingerprint invalidation;
+- authenticated POSIX approval Broker, one-time and session decisions, cancellation during connection or queueing, timeout, and Schema-fingerprint invalidation;
+- privacy-safe audit correlation across proxy runs and client sessions, exact approval resolution, explicit non-forwarding evidence, and MCP `isError` result handling;
+- conservative AgentTape normalization for its four fenced read/write tools, with unknown aliases and tools remaining unknown;
 - six curated policy recipes (`filesystem`, `github`, `fetch`, `sqlite`, `postgres`, `git`);
 - default output secret redaction without storing raw arguments or raw results in audit logs;
 - Codex, Cursor, Claude Desktop, and Claude Code configuration helpers, `toolfence doctor`, reproducible demos, coverage gates, package smoke tests, and trusted publishing;
@@ -37,17 +39,18 @@ The current boundary remains intentionally narrow:
 - the upstream MCP Server keeps the operating-system permissions and environment of the ToolFence process;
 - cross-Host end-to-end evidence, an explicitly versioned action model, and a versioned audit evidence contract are not yet shipped.
 
-## Now: v0.3.3 protocol conformance evidence
+## Now: v0.3.4 protocol conformance evidence
 
 **Outcome:** make every compatibility claim precise, reproducible, and release-gated before adding a new trust boundary.
 
-**Starting point:** `v0.3.2` shipped the two security-contract repairs with regression coverage. Protocol conformance and compatibility evidence remain open.
+**Starting point:** `v0.3.3` shipped the security and evidence-contract repairs found through five real AgentTape scenarios. Protocol conformance and compatibility evidence remain open.
 
 Planned work:
 
 - Publish a machine-readable stdio protocol matrix covering ToolFence, Node.js, MCP protocol revision, transport, and fixture/Server evidence. Record operating system and Host as evidence context without claiming the full Host × OS matrix in this phase.
 - Add legacy initialization fixtures and MCP `2026-07-28` fixtures covering `server/discover`, per-request `_meta`, `tools/list`, `tools/call`, cancellation, cache metadata, and Multi Round-Trip Requests. These fixtures prove transparent pass-through; they do not mean ToolFence implements or claims the corresponding higher-level capabilities.
 - Prove that the same normalized action and policy produce the same decision across supported protocol revisions and currently verified stdio configurations.
+- Run the applicable scenarios from the mirrored [AgentTape × ToolFence alignment contract](docs/AGENTTAPE_TOOLFENCE_ALIGNMENT.md) in a real Codex task. Treat the result as dated cross-project evidence; it does not replace the conformance corpus or create a new Host/OS support claim.
 - Extend `toolfence doctor` and release checks so unsupported or unverified combinations are reported clearly without weakening fail-closed execution.
 - Synchronize README, security policy, testing strategy, development guide, release instructions, and runtime version strings with the actual supported release.
 
@@ -58,7 +61,7 @@ Release gates:
 3. The compatibility matrix distinguishes `supported`, `experimental`, `unverified`, and `unsupported`, with evidence dates and no implied support.
 4. `npm run verify`, the full CI matrix, package smoke tests, production dependency audit, and release preflight pass from a clean tree.
 
-Non-goals for v0.3.3: new policy semantics, new recipes without demonstrated demand, Windows interactive approval, Streamable HTTP, OAuth, process isolation, or a remote service.
+Non-goals for v0.3.4: new policy semantics, new recipes without demonstrated demand, Windows interactive approval, Streamable HTTP, OAuth, process isolation, or a remote service.
 
 ## Next: v0.4 cross-platform enforcement baseline
 

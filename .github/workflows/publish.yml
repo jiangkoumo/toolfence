@@ -7,19 +7,26 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Verify release commit is on main
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
       - run: npm ci
+      - run: npm audit --omit=dev
       - run: npm run release:check
       - run: npm run verify
       - name: Check registry version
@@ -55,3 +62,15 @@ jobs:
       - name: Skip an already published version
         if: steps.registry.outputs.exists == 'true'
         run: echo "${{ steps.registry.outputs.name }}@${{ steps.registry.outputs.version }} is already available; verification passed."
+      - name: Attach installable package to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          package_file=$(npm pack --silent)
+          asset="${package_file}#Installable npm package"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$asset" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$asset" --verify-tag --title "ToolFence ${GITHUB_REF_NAME#v}" --generate-notes
+          fi

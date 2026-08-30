@@ -2,7 +2,9 @@
 
 本文档是 ToolFence 的产品设计、架构约束和开发路线基线。README 面向使用者；本文档面向维护者和贡献者。
 
-当前实现版本为 `0.3.2`。第 2、3 节保留 v0.1/v0.2 的历史设计与验收基线；第 4 节记录基于当前实现、安全修复和 MCP 生态变化重新制定的后续路线。公开优先级以 [`ROADMAP.md`](ROADMAP.md) 为准。
+当前实现版本为 `0.3.3`。第 2、3 节保留 v0.1/v0.2 的历史设计与验收基线；第 4 节记录基于当前实现、安全修复和 MCP 生态变化重新制定的后续路线。公开优先级以 [`ROADMAP.md`](ROADMAP.md) 为准。
+
+与 AgentTape 的双向真实验证遵循 [`docs/AGENTTAPE_TOOLFENCE_ALIGNMENT.md`](docs/AGENTTAPE_TOOLFENCE_ALIGNMENT.md)。开发 ToolFence 时，AgentTape 作为固定版本的伴随观察器记录真实 Codex 失败；该证据补充但不替代 ToolFence 自身的 conformance corpus、`npm run verify` 和发布门槛。
 
 ## 1. 最终设计构想
 
@@ -141,13 +143,16 @@ ToolFence 最终应处理以下威胁：
 
 `v0.3.2` 会把无显式规则命中的未知、歧义或畸形动作从隐式 `allow` 收紧为 `ask`，并在容量不足时于进入上游前拒绝新请求。仍使用 `v0.3.1` 的用户必须使用 `ask` 或 `deny` 默认策略；所有版本都不得把输出脱敏视为唯一的秘密保护边界。
 
+`v0.3.3` 根据 2026-08-30 的 AgentTape 五场景复盘修复了证据与取消路径：MCP `result.isError: true` 计入 result error；审批 audit 保留 `approvalId` 与真实 `allow-once`/`allow-session`/`deny` resolution；decision/result 带 `proxyRunId` 和 `clientSessionId`；deny/timeout 明确记录 `dispatch: not-forwarded`；连接期取消不会留下可被事后批准为会话授权的幽灵审批。AgentTape 的四个 fenced 工具也按精确 server/tool 映射为 `fs.read`/`fs.write`，未知同名工具仍为 `unknown`。
+
 ### 1.8 版本路线
 
 - **v0.1（已完成）— 协议与策略基础**：stdio Proxy、文件/Shell 适配、YAML 策略、TTY 审批、JSONL 审计。
 - **v0.2（已完成）— 稳定本地基线**：安全加固、本地审批 Broker、Git/HTTP 动作适配、策略工具、真实集成测试和发布门槛。
 - **v0.3/v0.3.1（已完成）— 可采用性与结果保护**：Host 配置、Doctor、策略 Recipes、路径与内存保护、SSRF 防护、默认输出脱敏和可信发布。
 - **v0.3.2（已完成）— 安全契约修复**：不确定动作不能继承宽松默认值；请求跟踪容量与重复 ID 路径 fail closed。
-- **v0.3.3（当前）— 协议兼容证明**：发布协议支持矩阵与 Conformance corpus，覆盖 MCP 新旧生命周期。
+- **v0.3.3（已完成）— 联合测试修复**：补齐审批、取消、调度与结果证据，并保守识别 AgentTape fenced 工具。
+- **v0.3.4（当前）— 协议兼容证明**：发布协议支持矩阵与 Conformance corpus，覆盖 MCP 新旧生命周期。
 - **v0.4（下一阶段）— 跨平台统一执行**：Windows 安全审批、本地 Host 一致性、版本化动作模型与审计证据契约。
 - **v0.5-alpha（条件阶段）— 受限 Streamable HTTP**：先完成拓扑、授权与威胁模型，再验证一个窄范围远程传输路径。
 - **v1.0（稳定承诺）**：稳定 Schema 与迁移规则、可重复兼容证据、独立安全审阅和真实用户验证。
@@ -429,11 +434,11 @@ toolfence policy test --policy ./policy.yaml --cases ./policy-cases.yaml
 - 对原始结果进行通用敏感信息脱敏。
 - MCP Streamable HTTP 代理。
 
-## 4. 当前路线：从 v0.3.2 到稳定兼容承诺
+## 4. 当前路线：从 v0.3.3 到稳定兼容承诺
 
 ### 4.1 规划依据与项目判断
 
-截至 2026-08-28，ToolFence 已发布 `v0.3.2`。本地实现已经具备较成熟的 stdio 策略代理、POSIX Broker、六个内置 Recipe、默认结果脱敏、Host 配置工具、Doctor、真实集成 fixtures、覆盖率门槛和可信发布流程；不确定动作与请求跟踪容量的两个安全契约偏差也已修复。公开仓库与 npm 已出现早期关注，但这些发现信号不等于持续使用或留存，尚不足以证明团队控制台、更多 Recipe 或复杂沙箱是优先需求。
+截至 2026-08-30，ToolFence 已完成 `v0.3.3`。当前实现具备较成熟的 stdio 策略代理、POSIX Broker、六个内置 Recipe、默认结果脱敏、Host 配置工具、Doctor、真实集成 fixtures、覆盖率门槛和可信发布流程；安全契约、连接期取消和联合测试发现的证据缺口均已有回归覆盖。公开仓库与 npm 已出现早期关注，但这些发现信号不等于持续使用或留存，尚不足以证明团队控制台、更多 Recipe 或复杂沙箱是优先需求。
 
 外部协议环境已发生重要变化：
 
@@ -446,7 +451,7 @@ toolfence policy test --policy ./policy.yaml --cases ./policy-cases.yaml
 1. 策略 Schema 允许 `default: allow`，但公开不变量要求未知或歧义动作不能静默放行。
 2. 在途请求跟踪达到容量上限时，必须保证任何晚到结果仍经过脱敏与审计，或在请求进入上游前明确拒绝；不得通过丢弃跟踪记录降级安全路径。
 
-因此，路线顺序调整为：在 `v0.3.2` 修复安全契约后，由 `v0.3.3` 证明新旧协议兼容，再补齐 Windows 本地审批和跨 Host 证据，最后才以 alpha 方式引入受限 Streamable HTTP。进程隔离与云端产品继续保持为条件决策。
+因此，路线顺序调整为：在 `v0.3.3` 收口安全与真实联合测试问题后，由 `v0.3.4` 证明新旧协议兼容，再补齐 Windows 本地审批和跨 Host 证据，最后才以 alpha 方式引入受限 Streamable HTTP。进程隔离与云端产品继续保持为条件决策。
 
 ### 4.2 优先级原则
 
@@ -457,11 +462,11 @@ toolfence policy test --policy ./policy.yaml --cases ./policy-cases.yaml
 5. **Host 审批是互补控制**：不能假设交互提示在 headless、SDK、cloud 或自动运行模式一定存在。
 6. **真实采用决定重投入**：在设计合作用户验证前，不建设远程控制台、策略云同步或大规模平台包装。
 
-### 4.3 当前阶段：v0.3.3 协议 Conformance
+### 4.3 当前阶段：v0.3.4 协议 Conformance
 
 阶段目标是不增加新的信任边界，而是让当前协议兼容能力可证明、可诊断、可发布。
 
-起点状态（2026-08-28）：`v0.3.2` 已修复两个安全契约偏差，并通过定向测试、完整覆盖率测试和 `npm run verify`；协议兼容矩阵与 Conformance corpus 仍待完成。
+起点状态（2026-08-30）：`v0.3.3` 已修复两个安全契约偏差、联合测试证据缺口和连接期取消竞态；协议兼容矩阵与 Conformance corpus 仍待完成。
 
 必须完成：
 
@@ -574,7 +579,15 @@ npm test
 npm run build
 ```
 
-### 5.2 提交要求
+### 5.2 双向联合验证
+
+- 先指定本轮主项目。开发 ToolFence 时保持 AgentTape 版本固定；只有双边证据确认 AgentTape 的独立缺陷后，才另开一轮修改 AgentTape。
+- 按共同对齐契约选择与变更相关的最小场景。Policy/normalizer 至少覆盖策略拒绝，Broker 至少覆盖审批超时，proxy/result/audit 至少覆盖允许后的上游失败。
+- 在启用 AgentTape Hook 的全新 Codex 任务中执行真实调用，用唯一 `JOINT_RUN_ID` 对齐 AgentTape tape 与 ToolFence audit。
+- 联合验证是带日期的真实宿主证据，不替代协议 fixtures、支持矩阵或任何自动化 release gate，也不能自动扩大 Host/OS 支持声明。
+- Raw tape、runtime、audit、Broker 数据和项目级 MCP 配置保持本地；只有经过人工复核的最小 regression 才能提交。
+
+### 5.3 提交要求
 
 - 先写或更新能证明行为的测试，再修改实现。
 - 安全语义变化必须同步更新 README、本手册和示例策略。
@@ -583,7 +596,7 @@ npm run build
 - 新公开字段必须有 Schema 校验和兼容性说明。
 - 不提交真实密钥、原始审批数据或审计日志。
 
-### 5.3 完成性检查
+### 5.4 完成性检查
 
 ```bash
 npm run typecheck

@@ -5,7 +5,7 @@ import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ApprovalRequester } from "../src/approval.js";
-import { AuditLogger } from "../src/audit.js";
+import { AuditLogger, readAudit } from "../src/audit.js";
 import { parsePolicy } from "../src/config.js";
 import { PolicyEngine } from "../src/policy.js";
 import { startProxy } from "../src/proxy.js";
@@ -13,6 +13,7 @@ import { startProxy } from "../src/proxy.js";
 const fixtures = dirname(fileURLToPath(import.meta.url));
 const echoFixture = join(fixtures, "fixtures/echo-server.mjs");
 const exitFixture = join(fixtures, "fixtures/exit-server.mjs");
+const trackingFixture = join(fixtures, "fixtures/tracking-server.mjs");
 
 function waitForLine(output: PassThrough): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
@@ -84,13 +85,29 @@ describe("proxy lifecycle safety", () => {
 
   it("denies after an approval timeout even if the requester hangs", async () => {
     const approval: ApprovalRequester = { request: () => new Promise(() => undefined) };
-    const test = harness(approval, { timeout: 20 });
+    const test = harness(approval, { timeout: 20, fixture: trackingFixture });
     test.input.write(call("timeout"));
     const response = await waitForLine(test.output);
     expect(response.result).toMatchObject({ isError: true });
     expect(JSON.stringify(response)).toContain("timed out");
+
+    const count = waitForLine(test.output);
+    test.input.write(`${JSON.stringify({ jsonrpc: "2.0", method: "test/report-count" })}\n`);
+    expect(await count).toMatchObject({
+      method: "test/request-count",
+      params: { count: 0 },
+    });
     test.input.end();
     await test.controller.closed;
+
+    expect(readAudit(test.auditPath)[0]).toMatchObject({
+      event: "decision",
+      requestId: "timeout",
+      approvalId: expect.any(String),
+      resolution: "deny",
+      dispatch: "not-forwarded",
+      decision: { effect: "deny", reason: "Approval timed out" },
+    });
   });
 
   it("returns a terminal denial when an approval implementation throws", async () => {

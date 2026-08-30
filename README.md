@@ -37,6 +37,8 @@ toolfence policy init --recipe filesystem
 toolfence policy check --policy ./toolfence.yaml
 ```
 
+The npm command is the recommended one-step install. Each GitHub Release also attaches the same installable `.tgz`; after downloading it, run `npm install -g ./toolfence-mcp-<version>.tgz`. The automatically generated GitHub “Source code” archives are repository snapshots, not installers.
+
 Wrap a local Filesystem MCP server:
 
 ```bash
@@ -89,7 +91,7 @@ ToolFence is designed to complement host approvals and OS isolation. It is not a
 
 ## Status
 
-Version 0.3.2 provides conservative handling for uncertain actions, fail-closed request-tracking capacity, built-in policy recipes, default-on output secret redaction, scriptable approvals, audit inspection and diagnostic commands, copy-ready MCP Host configuration, enforced test coverage, and npm trusted publishing provenance.
+Version 0.3.3 adds cancellation-safe Broker connection handling, precise approval and dispatch evidence, MCP `isError` result semantics, and conservative AgentTape integration to the existing uncertain-action and request-capacity protections.
 
 ToolFence is **not a sandbox for a malicious MCP server process**: the upstream process still runs with the current user's operating-system permissions.
 
@@ -172,6 +174,8 @@ Filesystem paths are canonicalized before matching, including existing symbolic 
 
 Current operations are `fs.read`, `fs.write`, `fs.delete`, `shell.exec`, `git.read`, `git.write`, `git.remote`, `net.request`, and `unknown`. Ambiguous Git commands, invalid URLs, and unrecognized tools fall back through `shell.exec` or `unknown` instead of being treated as a known safe action.
 
+The AgentTape integration is normalized conservatively only for the `agenttape`, `agenttape-fenced`, and `agenttape_fenced` server aliases: `list_tapes`, `inspect_tape`, and `fork_run` are `fs.read`; `save_regression` is `fs.write` scoped to `workspaceRoot/tests/agenttape/<filename>`. The same tool names from other servers and unrecognized AgentTape tools remain `unknown`.
+
 As of `v0.3.2`, an unmatched unknown, ambiguous, or malformed action requires approval instead of inheriting `default: allow`, while an explicit matching rule can still authorize it. Users remaining on `v0.3.1` should use `ask` or `deny` as their default.
 
 Output secret redaction is enabled by default for tracked tool results, including successful results and JSON-RPC errors. Set `redactSecrets: false` at the top level of a policy only when exact upstream output compatibility is required. Detection is best-effort and covers known token formats, private keys, textual secret assignments, and structured string fields with sensitive names; it does not replace destination controls or process isolation.
@@ -189,7 +193,7 @@ toolfence policy test --policy ./examples/policy.yaml --cases ./policy-cases.yam
 
 ## Audit log
 
-The default audit file is `.toolfence/audit.jsonl` under the workspace. It records operation names, affected paths, tool identity, final policy decisions, and SHA-256 hashes of upstream results. Raw tool arguments, command arguments, and raw results are intentionally omitted to reduce secret leakage.
+The default audit file is `.toolfence/audit.jsonl` under the workspace. It records operation names, affected paths, tool identity, final policy decisions, and SHA-256 hashes of upstream results. Decision/result records carry `proxyRunId` and `clientSessionId`; approval decisions additionally carry `approvalId` and the actual `allow-once`, `allow-session`, or `deny` resolution. A denied or timed-out call records `dispatch: not-forwarded`. Allowed decisions do not claim successful dispatch before the upstream write; a correlated result is the evidence that an upstream response returned. Raw tool arguments, command arguments, and raw results are intentionally omitted to reduce secret leakage.
 
 Use `--audit /path/to/audit.jsonl` to select a different path.
 
@@ -218,7 +222,7 @@ Additional current limitations:
 
 ## Development
 
-The architecture, threat model, historical implementation baselines, and current release gates are maintained in the [development guide](DEVELOPMENT.md). Public priorities and good first contribution candidates are in the [roadmap](ROADMAP.md).
+The architecture, threat model, historical implementation baselines, and current release gates are maintained in the [development guide](DEVELOPMENT.md). Public priorities and good first contribution candidates are in the [roadmap](ROADMAP.md). Mutual AgentTape × ToolFence dogfooding follows the mirrored [alignment contract](docs/AGENTTAPE_TOOLFENCE_ALIGNMENT.md).
 
 ```bash
 npm run typecheck

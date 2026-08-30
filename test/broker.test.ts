@@ -35,6 +35,14 @@ async function waitForPending(count: () => number): Promise<void> {
   throw new Error("approval was not queued");
 }
 
+async function waitForNoPending(count: () => number): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (count() === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("approval was not removed after timeout");
+}
+
 describe("local approval Broker", () => {
   it("derives the same safe short Socket path for every default client", () => {
     const env = { TMPDIR: `/tmp/${"very-long-directory/".repeat(8)}` };
@@ -52,7 +60,7 @@ describe("local approval Broker", () => {
       expect(statSync(broker.paths.socketPath).mode & 0o777).toBe(0o600);
       expect(statSync(broker.paths.tokenPath).mode & 0o777).toBe(0o600);
       const requester = new BrokerApprovalRequester(broker.paths, 1_000);
-      const result = requester.request(action, { effect: "ask", reason: "test" }, {
+      const result = requester.requestWithOutcome(action, { effect: "ask", reason: "test" }, {
         requestId: 1,
         sessionId: "session-a",
         schemaFingerprint: "schema-a",
@@ -63,7 +71,11 @@ describe("local approval Broker", () => {
       expect(JSON.stringify(listed.requests)).not.toContain("rawArguments");
       expect(JSON.stringify(listed.requests)).not.toContain("do-not-send");
       resolveApproval(listed.socket, listed.requests[0].approvalId, "allow-once");
-      expect(await result).toBe(true);
+      await expect(result).resolves.toEqual({
+        approved: true,
+        approvalId: listed.requests[0].approvalId,
+        resolution: "allow-once",
+      });
       listed.socket.end();
     } finally {
       await broker.close();
@@ -76,16 +88,24 @@ describe("local approval Broker", () => {
       const requester = new BrokerApprovalRequester(broker.paths, 1_000);
       requester.updateToolFingerprint("filesystem", "read_file", "schema-a");
       const context = { requestId: 1, sessionId: "session-a", schemaFingerprint: "schema-a" };
-      const first = requester.request(action, { effect: "ask", reason: "test" }, context);
+      const first = requester.requestWithOutcome(action, { effect: "ask", reason: "test" }, context);
       await waitForPending(broker.pendingCount);
       const listed = await listApprovals(broker.paths);
       resolveApproval(listed.socket, listed.requests[0].approvalId, "allow-session");
-      expect(await first).toBe(true);
+      await expect(first).resolves.toEqual({
+        approved: true,
+        approvalId: listed.requests[0].approvalId,
+        resolution: "allow-session",
+      });
       listed.socket.end();
-      expect(await requester.request(action, { effect: "ask", reason: "test" }, {
+      await expect(requester.requestWithOutcome(action, { effect: "ask", reason: "test" }, {
         ...context,
         requestId: 2,
-      })).toBe(true);
+      })).resolves.toEqual({
+        approved: true,
+        approvalId: listed.requests[0].approvalId,
+        resolution: "allow-session",
+      });
       expect(broker.pendingCount()).toBe(0);
 
       requester.updateToolFingerprint("filesystem", "read_file", "schema-b");
@@ -124,6 +144,68 @@ describe("local approval Broker", () => {
       sessionId: "session-a",
       schemaFingerprint: "schema-a",
     })).toBe(false);
+  });
+
+  it("does not enqueue an approval cancelled during Broker connection", async () => {
+    const broker = await startBroker(paths(mkdtempSync(join(tmpdir(), "toolfence-broker-"))));
+    try {
+      const requester = new BrokerApprovalRequester(broker.paths, 2_000);
+      const abort = new AbortController();
+      const outcome = requester.requestWithOutcome(action, { effect: "ask", reason: "test" }, {
+        requestId: "cancel-during-connect",
+        sessionId: "session-a",
+        approvalId: "approval-connect-race",
+        schemaFingerprint: "schema-a",
+        signal: abort.signal,
+      });
+      abort.abort();
+      await expect(Promise.race([
+        outcome,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("cancellation was not prompt")), 500)),
+      ])).resolves.toEqual({
+        approved: false,
+        approvalId: "approval-connect-race",
+        resolution: "deny",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(broker.pendingCount()).toBe(0);
+
+      const followup = requester.requestWithOutcome(action, { effect: "ask", reason: "test" }, {
+        requestId: "after-cancel",
+        sessionId: "session-a",
+        schemaFingerprint: "schema-a",
+      });
+      await waitForPending(broker.pendingCount);
+      const listed = await listApprovals(broker.paths);
+      expect(listed.requests).toHaveLength(1);
+      resolveApproval(listed.socket, listed.requests[0].approvalId, "deny");
+      await expect(followup).resolves.toMatchObject({ approved: false, resolution: "deny" });
+      listed.socket.end();
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it("removes a timed-out approval from the Broker pending queue", async () => {
+    const broker = await startBroker(paths(mkdtempSync(join(tmpdir(), "toolfence-broker-"))));
+    try {
+      const requester = new BrokerApprovalRequester(broker.paths, 20);
+      const outcome = requester.requestWithOutcome(action, { effect: "ask", reason: "test" }, {
+        requestId: "timeout",
+        sessionId: "session-a",
+        approvalId: "approval-timeout",
+        schemaFingerprint: "schema-a",
+      });
+      await waitForPending(broker.pendingCount);
+      await expect(outcome).resolves.toEqual({
+        approved: false,
+        approvalId: "approval-timeout",
+        resolution: "deny",
+      });
+      await waitForNoPending(broker.pendingCount);
+    } finally {
+      await broker.close();
+    }
   });
 
   it("rejects a second Broker instead of replacing a live Socket", async () => {

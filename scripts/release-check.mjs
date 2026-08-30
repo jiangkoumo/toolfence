@@ -42,6 +42,7 @@ for (const file of [
   "docs/assets/architecture.svg",
   "docs/assets/demo.gif",
   "docs/assets/env-leak-demo.gif",
+  "docs/AGENTTAPE_TOOLFENCE_ALIGNMENT.md",
   "docs/codex.md",
   "docs/cursor.md",
   "docs/claude-desktop.md",
@@ -52,6 +53,18 @@ for (const file of [
 requireCondition(
   read("CHANGELOG.md").includes(`## [${packageJson.version}]`),
   `CHANGELOG.md has no ${packageJson.version} release entry`,
+);
+requireCondition(
+  read("README.md").includes(`Version ${packageJson.version}`),
+  `README.md does not identify Version ${packageJson.version}`,
+);
+requireCondition(
+  read("ROADMAP.md").includes(`Current release: \`v${packageJson.version}\``),
+  `ROADMAP.md does not identify v${packageJson.version} as the current release`,
+);
+requireCondition(
+  read("DEVELOPMENT.md").includes(`当前实现版本为 \`${packageJson.version}\``),
+  `DEVELOPMENT.md does not identify ${packageJson.version} as the current implementation`,
 );
 
 if (packageJson.contentPolicy) {

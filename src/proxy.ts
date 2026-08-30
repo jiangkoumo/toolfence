@@ -3,8 +3,8 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
 import { normalizeToolCall } from "./adapters.js";
-import type { ApprovalRequester } from "./approval.js";
-import type { AuditLogger } from "./audit.js";
+import type { ApprovalOutcome, ApprovalRequester } from "./approval.js";
+import type { AuditCorrelation, AuditDecisionContext, AuditLogger } from "./audit.js";
 import type { PolicyEngine } from "./policy.js";
 import { redactToolResult } from "./redact.js";
 import { fingerprintToolList } from "./schema.js";
@@ -38,6 +38,7 @@ interface ToolCallParams {
 
 interface AwaitingApproval {
   id: JsonRpcId;
+  approvalId: string;
   abort: AbortController;
   reason?: "client-cancelled" | "timeout" | "proxy-closed";
 }
@@ -46,6 +47,7 @@ interface ForwardedRequest {
   id: JsonRpcId;
   method: string;
   action?: NormalizedAction;
+  auditCorrelation?: AuditCorrelation;
 }
 
 const MAX_IN_FLIGHT_REQUESTS = 2_000;
@@ -66,6 +68,13 @@ function toolCallParams(value: unknown): ToolCallParams | undefined {
   return typeof params.name === "string"
     ? { name: params.name, arguments: params.arguments }
     : undefined;
+}
+
+function isMcpToolError(value: unknown): boolean {
+  return value !== null
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && (value as { isError?: unknown }).isError === true;
 }
 
 function cancelledRequestId(value: unknown): JsonRpcId | undefined {
@@ -103,13 +112,20 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function approvalReason(resolution: ApprovalOutcome["resolution"]): string {
+  return resolution === "allow-session"
+    ? "Approved for this session by user"
+    : "Approved once by user";
+}
+
 export function startProxy(options: ProxyOptions): ProxyController {
   const child = spawn(options.command, options.args, {
     cwd: options.cwd,
     env: options.env ?? process.env,
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const sessionId = randomUUID();
+  const proxyRunId = randomUUID();
+  const clientSessionId = randomUUID();
   const forwarded = new Map<string, ForwardedRequest>();
   const awaiting = new Map<string, AwaitingApproval>();
   const toolFingerprints = new Map<string, string>();
@@ -196,8 +212,9 @@ export function startProxy(options: ProxyOptions): ProxyController {
                 options.audit.result(
                   tracked.id,
                   createHash("sha256").update(line).digest("hex"),
-                  message.error !== undefined,
+                  message.error !== undefined || isMcpToolError(message.result),
                   redacted,
+                  tracked.auditCorrelation,
                 );
               } catch (error) {
                 suppress = true;
@@ -229,7 +246,12 @@ export function startProxy(options: ProxyOptions): ProxyController {
     });
   });
 
-  function forward(line: string, request?: JsonRpcRequest, action?: NormalizedAction): void {
+  function forward(
+    line: string,
+    request?: JsonRpcRequest,
+    action?: NormalizedAction,
+    auditCorrelation?: AuditCorrelation,
+  ): void {
     if (request?.id !== undefined) {
       const key = requestKey(request.id);
       if (awaiting.has(key) || forwarded.has(key)) {
@@ -240,7 +262,7 @@ export function startProxy(options: ProxyOptions): ProxyController {
         writeOutput(rpcError(request.id, -32000, "ToolFence has too many in-flight requests"));
         return;
       }
-      forwarded.set(key, { id: request.id, method: request.method, action });
+      forwarded.set(key, { id: request.id, method: request.method, action, auditCorrelation });
     }
     try {
       child.stdin.write(`${line}\n`);
@@ -315,31 +337,45 @@ export function startProxy(options: ProxyOptions): ProxyController {
       ? normalizeToolCall(options.server, params.name, params.arguments ?? {}, options.cwd)
       : normalizeToolCall(options.server, "<invalid>", {}, options.cwd);
     let decision = options.policy.evaluate(action);
+    let approvalContext: Pick<AuditDecisionContext, "approvalId" | "resolution"> | undefined;
 
     if (decision.effect === "ask") {
       const abort = new AbortController();
-      const pending: AwaitingApproval = { id: message.id, abort };
+      const pending: AwaitingApproval = { id: message.id, approvalId: randomUUID(), abort };
       awaiting.set(key, pending);
       const timeout = setTimeout(() => {
         pending.reason = "timeout";
         options.approval.cancel?.(message.id as JsonRpcId, "timeout");
         abort.abort();
       }, options.approvalTimeoutMs ?? 60_000);
-      const aborted = new Promise<false>((resolve) =>
-        abort.signal.addEventListener("abort", () => resolve(false), { once: true }),
+      const deniedOutcome: ApprovalOutcome = {
+        approved: false,
+        approvalId: pending.approvalId,
+        resolution: "deny",
+      };
+      const aborted = new Promise<ApprovalOutcome>((resolve) =>
+        abort.signal.addEventListener("abort", () => resolve(deniedOutcome), { once: true }),
       );
-      let approved = false;
+      let outcome = deniedOutcome;
       try {
-        approved = await Promise.race([
-          options.approval.request(action, decision, {
-              requestId: message.id,
-              sessionId,
-              schemaFingerprint: toolFingerprints.get(action.tool),
-              signal: abort.signal,
-            })
+        const context = {
+          requestId: message.id,
+          sessionId: clientSessionId,
+          approvalId: pending.approvalId,
+          schemaFingerprint: toolFingerprints.get(action.tool),
+          signal: abort.signal,
+        };
+        outcome = await Promise.race([
+          (options.approval.requestWithOutcome
+            ? options.approval.requestWithOutcome(action, decision, context)
+            : options.approval.request(action, decision, context).then((approved) => ({
+                approved,
+                approvalId: pending.approvalId,
+                resolution: approved ? "allow-once" as const : "deny" as const,
+              })))
             .catch((error: unknown) => {
               options.errorOutput.write(`ToolFence: approval failed: ${errorMessage(error)}\n`);
-              return false;
+              return deniedOutcome;
             }),
           aborted,
         ]);
@@ -348,8 +384,12 @@ export function startProxy(options: ProxyOptions): ProxyController {
         awaiting.delete(key);
       }
       if (pending.reason === "client-cancelled" || pending.reason === "proxy-closed") return;
-      decision = approved
-        ? { ...decision, effect: "allow", reason: "Approved once by user" }
+      approvalContext = {
+        approvalId: outcome.approvalId ?? pending.approvalId,
+        resolution: outcome.resolution,
+      };
+      decision = outcome.approved
+        ? { ...decision, effect: "allow", reason: approvalReason(outcome.resolution) }
         : {
             ...decision,
             effect: "deny",
@@ -357,8 +397,14 @@ export function startProxy(options: ProxyOptions): ProxyController {
           };
     }
 
+    const auditCorrelation: AuditCorrelation = { proxyRunId, clientSessionId };
+    const auditContext: AuditDecisionContext = {
+      ...auditCorrelation,
+      ...approvalContext,
+      ...(decision.effect === "deny" ? { dispatch: "not-forwarded" as const } : {}),
+    };
     try {
-      options.audit.decision(message.id, action, decision);
+      options.audit.decision(message.id, action, decision, auditContext);
     } catch (error) {
       writeOutput(toolErrorResponse(message.id, `ToolFence denied this tool call: audit failed: ${errorMessage(error)}`));
       return;
@@ -367,7 +413,7 @@ export function startProxy(options: ProxyOptions): ProxyController {
       writeOutput(deniedResponse(message.id, decision));
       return;
     }
-    forward(line, message, action);
+    forward(line, message, action, auditCorrelation);
   }
 
   return { child, closed, stop: () => child.kill("SIGTERM") };

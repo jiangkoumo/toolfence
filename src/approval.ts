@@ -2,15 +2,29 @@ import { closeSync, createReadStream, createWriteStream, openSync } from "node:f
 import { createInterface } from "node:readline/promises";
 import type { Decision, JsonRpcId, NormalizedAction } from "./types.js";
 
+export type ApprovalResolution = "allow-once" | "allow-session" | "deny";
+
+export interface ApprovalOutcome {
+  approved: boolean;
+  approvalId?: string;
+  resolution: ApprovalResolution;
+}
+
 export interface ApprovalContext {
   requestId: JsonRpcId;
   sessionId: string;
+  approvalId?: string;
   schemaFingerprint?: string;
   signal?: AbortSignal;
 }
 
 export interface ApprovalRequester {
   request(action: NormalizedAction, decision: Decision, context?: ApprovalContext): Promise<boolean>;
+  requestWithOutcome?(
+    action: NormalizedAction,
+    decision: Decision,
+    context?: ApprovalContext,
+  ): Promise<ApprovalOutcome>;
   cancel?(requestId: JsonRpcId, reason: "client-cancelled" | "timeout" | "proxy-closed"): void;
   updateToolFingerprint?(server: string, tool: string, fingerprint: string): void;
 }

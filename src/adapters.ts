@@ -1,3 +1,4 @@
+import { isAbsolute, join } from "node:path";
 import { canonicalizePath } from "./paths.js";
 import type { NormalizedAction, Operation } from "./types.js";
 
@@ -20,6 +21,10 @@ const filesystemOperations: Record<string, Operation> = {
   remove_file: "fs.delete",
   remove_directory: "fs.delete",
 };
+
+const agentTapeServers = new Set(["agenttape", "agenttape-fenced", "agenttape_fenced"]);
+const agentTapeReadTools = new Set(["list_tapes", "inspect_tape", "fork_run"]);
+const agentTapeFilename = /^[A-Za-z0-9._-]+\.tape$/;
 
 const shellTools = new Set([
   "execute_command",
@@ -74,6 +79,54 @@ function objectArguments(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function agentTapeWorkspaceRoot(args: Record<string, unknown>, workspace: string): string | undefined {
+  const requestedRoot = args.workspaceRoot;
+  if (requestedRoot === undefined) return workspace;
+  return typeof requestedRoot === "string" && isAbsolute(requestedRoot)
+    ? requestedRoot
+    : undefined;
+}
+
+function normalizeAgentTape(
+  server: string,
+  tool: string,
+  name: string,
+  rawArguments: unknown,
+  workspace: string,
+): NormalizedAction | undefined {
+  const args = objectArguments(rawArguments);
+  const workspaceRoot = agentTapeWorkspaceRoot(args, workspace);
+  const argumentsAreObject = rawArguments !== null && typeof rawArguments === "object" &&
+    !Array.isArray(rawArguments);
+
+  if (agentTapeReadTools.has(name)) {
+    return {
+      operation: "fs.read",
+      normalization: argumentsAreObject && workspaceRoot ? "known" : "ambiguous",
+      resources: workspaceRoot
+        ? [canonicalizePath(join(workspaceRoot, ".agent-tape", "tapes"), workspace)]
+        : [],
+      server,
+      tool,
+      rawArguments,
+    };
+  }
+
+  if (name !== "save_regression") return undefined;
+  const filename = args.filename;
+  const target = workspaceRoot && typeof filename === "string" && agentTapeFilename.test(filename)
+    ? canonicalizePath(join(workspaceRoot, "tests", "agenttape", filename), workspace)
+    : undefined;
+  return {
+    operation: "fs.write",
+    normalization: argumentsAreObject && target ? "known" : "ambiguous",
+    resources: target ? [target] : [],
+    server,
+    tool,
+    rawArguments,
+  };
 }
 
 function collectResourceValues(args: Record<string, unknown>): string[] {
@@ -262,6 +315,11 @@ export function normalizeToolCall(
   workspace: string,
 ): NormalizedAction {
   const name = baseToolName(tool);
+  if (agentTapeServers.has(server.toLowerCase())) {
+    const agentTapeAction = normalizeAgentTape(server, tool, name, rawArguments, workspace);
+    if (agentTapeAction) return agentTapeAction;
+  }
+
   if (name in filesystemOperations) {
     const args = objectArguments(rawArguments);
     const resources = collectResourceValues(args).map((value) =>

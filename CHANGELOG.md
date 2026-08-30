@@ -4,6 +4,19 @@ All notable changes to ToolFence are documented here. The project follows Semant
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-08-30
+
+### Security
+
+- Prevented a cancellation during Broker connection from creating a ghost approval that could later grant `allow-session` access.
+- Recorded approval IDs and actual resolutions, proxy/client correlation, explicit `not-forwarded` evidence for deny and timeout paths, and MCP `isError` results without storing raw arguments or results.
+
+### Changed
+
+- Normalized the four AgentTape tools conservatively: list, inspect, and fork are scoped reads; regression saving is a scoped write; unknown aliases and tools remain unknown.
+- Added direct zero-forward, pending-cleanup, result-error, audit-correlation, and approval-resolution regression coverage from five real AgentTape × ToolFence development scenarios.
+- Added an installable npm package asset to each GitHub Release and enforced main ancestry plus production dependency audit in the tag workflow.
+
 ## [0.3.2] - 2026-08-28
 
 ### Security
