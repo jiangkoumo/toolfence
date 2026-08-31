@@ -1,13 +1,14 @@
 import { spawn } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
-import { basename } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { brokerStatus, defaultBrokerPaths, type BrokerPaths } from "./broker.js";
 import { loadPolicy } from "./config.js";
 
 export type DoctorStatus = "pass" | "warn" | "fail";
 
 export interface DoctorCheck {
-  check: "node" | "policy" | "broker" | "upstream";
+  check: "node" | "policy" | "broker" | "upstream" | "conformance";
   status: DoctorStatus;
   message: string;
 }
@@ -29,7 +30,11 @@ interface DoctorDependencies {
   nodeVersion?: string;
   platform?: NodeJS.Platform;
   startupTimeoutMs?: number;
+  conformanceRoot?: string;
 }
+
+const CONFORMANCE_STATUSES = new Set(["supported", "experimental", "unverified", "unsupported"]);
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -37,6 +42,146 @@ function errorMessage(error: unknown): string {
 
 function mode(path: string): number {
   return statSync(path).mode & 0o777;
+}
+
+interface ConformanceMatrix {
+  matrixVersion?: number;
+  toolfenceVersion?: string;
+  rows?: Array<{ id?: string; status?: string; mcpProtocol?: string[] }>;
+}
+
+interface ConformanceReport {
+  matrixVersion?: number;
+  generatedAt?: string;
+  rows?: Array<{ id?: string; revision?: string; status?: string }>;
+}
+
+// The matrix/report use the supported/experimental/unverified/unsupported
+// vocabulary. A supported row is verified only when every declared protocol
+// revision has a passing dated report entry bound to the same matrix version;
+// stale, undated, mismatched, or incomplete evidence downgrades to warn, and
+// unsupported combinations never expand permissions (the proxy is fail-closed
+// for every protocol shape).
+export function conformanceCheck(root: string, packageVersion: string): DoctorCheck {
+  const matrixPath = join(root, "conformance", "matrix.json");
+  if (!existsSync(matrixPath)) {
+    return {
+      check: "conformance",
+      status: "warn",
+      message: "No conformance matrix is shipped; protocol compatibility claims are unverified and stay fail-closed",
+    };
+  }
+  let matrix: ConformanceMatrix;
+  try {
+    matrix = JSON.parse(readFileSync(matrixPath, "utf8")) as ConformanceMatrix;
+  } catch (error) {
+    return { check: "conformance", status: "fail", message: `Conformance matrix is malformed: ${errorMessage(error)}` };
+  }
+  const rows = matrix.rows ?? [];
+  if (!rows.every((row) => typeof row.id === "string" && CONFORMANCE_STATUSES.has(row.status ?? ""))) {
+    return {
+      check: "conformance",
+      status: "fail",
+      message: "Conformance matrix rows must each declare an id and a status in supported/experimental/unverified/unsupported",
+    };
+  }
+  const reportPath = join(root, "conformance", "report.json");
+  let report: ConformanceReport | undefined;
+  if (existsSync(reportPath)) {
+    try {
+      report = JSON.parse(readFileSync(reportPath, "utf8")) as ConformanceReport;
+    } catch (error) {
+      return { check: "conformance", status: "warn", message: `Conformance report is malformed: ${errorMessage(error)}` };
+    }
+  }
+
+  const supported = rows.filter((row) => row.status === "supported");
+  const experimental = rows.filter((row) => row.status === "experimental").length;
+  const unverified = rows.filter((row) => row.status === "unverified").length;
+  const unsupported = rows.filter((row) => row.status === "unsupported").length;
+  const evidenceOk = report !== undefined &&
+    Number.isInteger(report.matrixVersion) &&
+    Number.isInteger(matrix.matrixVersion) &&
+    report.matrixVersion === matrix.matrixVersion &&
+    typeof report.generatedAt === "string" && report.generatedAt.length > 0;
+
+  const verified: string[] = [];
+  const incomplete: string[] = [];
+  for (const row of supported) {
+    const revisions = (row.mcpProtocol ?? []).filter((value): value is string => typeof value === "string");
+    const allPass = revisions.length > 0 && revisions.every((revision) =>
+      report?.rows?.some((entry) => entry.id === row.id && entry.revision === revision && entry.status === "pass"),
+    );
+    if (evidenceOk && allPass) verified.push(row.id!);
+    else incomplete.push(row.id!);
+  }
+
+  if (!(typeof matrix.toolfenceVersion === "string" && matrix.toolfenceVersion.length > 0)) {
+    return {
+      check: "conformance",
+      status: "warn",
+      message: "Conformance matrix has no toolfenceVersion; evidence is unverifiable and stays fail-closed",
+    };
+  }
+  if (packageVersion && matrix.toolfenceVersion !== packageVersion) {
+    return {
+      check: "conformance",
+      status: "warn",
+      message: `Conformance matrix targets ${matrix.toolfenceVersion} but this package is ${packageVersion}; evidence is stale and stays fail-closed`,
+    };
+  }
+  if (!existsSync(reportPath)) {
+    return {
+      check: "conformance",
+      status: "warn",
+      message: `Conformance matrix declares ${supported.length} supported row(s) but no report.json; run 'npm run conformance' to verify (unverified rows stay fail-closed)`,
+    };
+  }
+  report = report ?? { matrixVersion: undefined, generatedAt: undefined, rows: [] };
+  if (!Number.isInteger(matrix.matrixVersion)) {
+    return {
+      check: "conformance",
+      status: "warn",
+      message: "Conformance matrix has no integer matrixVersion; evidence is unverifiable and stays fail-closed",
+    };
+  }
+  if (!Number.isInteger(report.matrixVersion)) {
+    return {
+      check: "conformance",
+      status: "warn",
+      message: "Conformance report has no integer matrixVersion; evidence is unverifiable and stays fail-closed",
+    };
+  }
+  if (report.matrixVersion !== matrix.matrixVersion) {
+    return {
+      check: "conformance",
+      status: "warn",
+      message: `Conformance report is for matrix version ${report.matrixVersion} but the matrix is ${matrix.matrixVersion}; evidence is stale and stays fail-closed`,
+    };
+  }
+  if (!(typeof report.generatedAt === "string" && report.generatedAt.length > 0)) {
+    return {
+      check: "conformance",
+      status: "warn",
+      message: "Conformance report has no generatedAt date; evidence is undated and stays fail-closed",
+    };
+  }
+  if (incomplete.length > 0) {
+    return {
+      check: "conformance",
+      status: "warn",
+      message: `Conformance evidence is incomplete for supported rows: ${incomplete.join(", ")} (missing a passing dated run for every declared protocol revision); unverified rows stay fail-closed`,
+    };
+  }
+  const generated = report.generatedAt.slice(0, 10);
+  return {
+    check: "conformance",
+    status: verified.length > 0 && verified.length === supported.length ? "pass" : "warn",
+    message:
+      `${verified.length}/${supported.length} supported stdio row(s) verified by the conformance corpus (report ${generated}); ` +
+      `experimental: ${experimental}, unverified: ${unverified}, unsupported: ${unsupported}; ` +
+      "unverified or unsupported combinations never expand permissions and remain fail-closed",
+  };
 }
 
 async function probeUpstream(command: string, args: string[], cwd: string, timeoutMs: number): Promise<DoctorCheck> {
@@ -142,6 +287,14 @@ export async function diagnose(
       dependencies.startupTimeoutMs ?? 500,
     ));
   }
+
+  let packageVersion = "";
+  try {
+    packageVersion = (JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")) as { version?: string }).version ?? "";
+  } catch {
+    // The package manifest is optional for the conformance evidence check.
+  }
+  checks.push(conformanceCheck(dependencies.conformanceRoot ?? packageRoot, packageVersion));
 
   return { ok: checks.every((check) => check.status !== "fail"), checks };
 }

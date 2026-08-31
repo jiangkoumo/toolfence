@@ -1,0 +1,35 @@
+{
+  "reportVersion": 1,
+  "matrixVersion": 1,
+  "toolfenceVersion": "0.3.4",
+  "nodeVersion": "22.22.2",
+  "os": "darwin",
+  "host": "local",
+  "generatedAt": "2026-08-31T12:28:35.208Z",
+  "rows": [
+    {
+      "id": "stdio-legacy-init",
+      "revision": "2024-11-05",
+      "status": "pass",
+      "cases": 12,
+      "failures": [],
+      "verifiedAt": "2026-08-31T12:28:34.224Z"
+    },
+    {
+      "id": "stdio-legacy-init",
+      "revision": "2025-06-18",
+      "status": "pass",
+      "cases": 12,
+      "failures": [],
+      "verifiedAt": "2026-08-31T12:28:34.686Z"
+    },
+    {
+      "id": "stdio-2026-stateless",
+      "revision": "2026-07-28",
+      "status": "pass",
+      "cases": 13,
+      "failures": [],
+      "verifiedAt": "2026-08-31T12:28:35.162Z"
+    }
+  ]
+}

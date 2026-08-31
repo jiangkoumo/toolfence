@@ -2,7 +2,7 @@
 
 本文档是 ToolFence 的产品设计、架构约束和开发路线基线。README 面向使用者；本文档面向维护者和贡献者。
 
-当前实现版本为 `0.3.3`。第 2、3 节保留 v0.1/v0.2 的历史设计与验收基线；第 4 节记录基于当前实现、安全修复和 MCP 生态变化重新制定的后续路线。公开优先级以 [`ROADMAP.md`](ROADMAP.md) 为准。
+当前实现版本为 `0.3.4`。第 2、3 节保留 v0.1/v0.2 的历史设计与验收基线；第 4 节记录基于当前实现、安全修复和 MCP 生态变化重新制定的后续路线。公开优先级以 [`ROADMAP.md`](ROADMAP.md) 为准。
 
 与 AgentTape 的双向真实验证遵循 [`docs/AGENTTAPE_TOOLFENCE_ALIGNMENT.md`](docs/AGENTTAPE_TOOLFENCE_ALIGNMENT.md)。开发 ToolFence 时，AgentTape 作为固定版本的伴随观察器记录真实 Codex 失败；该证据补充但不替代 ToolFence 自身的 conformance corpus、`npm run verify` 和发布门槛。
 
@@ -140,10 +140,13 @@ ToolFence 最终应处理以下威胁：
 9. 策略文件的未知字段和重复规则 ID 必须导致启动失败。
 10. 工具 Schema 首次出现或指纹变化时，不得沿用未确认的会话授权。
 11. 已转发的 `tools/call` 必须保留请求关联直到终态；容量不足时要在进入上游前明确拒绝，不能丢弃跟踪记录后转发未脱敏或未审计的结果。
+12. 协议修订版本、传输或未验证组合不得扩大权限：策略决定对所有协议形状确定且元数据中性；`server/discover`、每请求 `_meta`、列表缓存元数据和 MRTR 仅透明透传，未验证版本与已验证版本产生相同决定。
 
 `v0.3.2` 会把无显式规则命中的未知、歧义或畸形动作从隐式 `allow` 收紧为 `ask`，并在容量不足时于进入上游前拒绝新请求。仍使用 `v0.3.1` 的用户必须使用 `ask` 或 `deny` 默认策略；所有版本都不得把输出脱敏视为唯一的秘密保护边界。
 
 `v0.3.3` 根据 2026-08-30 的 AgentTape 五场景复盘修复了证据与取消路径：MCP `result.isError: true` 计入 result error；审批 audit 保留 `approvalId` 与真实 `allow-once`/`allow-session`/`deny` resolution；decision/result 带 `proxyRunId` 和 `clientSessionId`；deny/timeout 明确记录 `dispatch: not-forwarded`；连接期取消不会留下可被事后批准为会话授权的幽灵审批。AgentTape 的四个 fenced 工具也按精确 server/tool 映射为 `fs.read`/`fs.write`，未知同名工具仍为 `unknown`。
+
+`v0.3.4`（2026-08-31）新增协议兼容证据：机器可读矩阵（`conformance/matrix.json`）与带日期报告（`conformance/report.json`）证明同一标准动作与策略在旧握手协议的每个声明修订（`2024-11-05`、`2025-06-18`）和 `2026-07-28` 无状态协议下产生相同决定；`server/discover`、每请求 `_meta`、列表缓存元数据与 MRTR 的 fixture 只证明透明透传。矩阵行采用 `supported`/`experimental`/`unverified`/`unsupported` 词汇；Doctor 与 release check 区分四态，未验证或未支持组合不扩大权限。协议修订元数据是中性的：带未验证协议版本（如 `2999-01-01`）的请求与已验证版本产生相同决定，且被原样透传。
 
 ### 1.8 版本路线
 
@@ -152,9 +155,9 @@ ToolFence 最终应处理以下威胁：
 - **v0.3/v0.3.1（已完成）— 可采用性与结果保护**：Host 配置、Doctor、策略 Recipes、路径与内存保护、SSRF 防护、默认输出脱敏和可信发布。
 - **v0.3.2（已完成）— 安全契约修复**：不确定动作不能继承宽松默认值；请求跟踪容量与重复 ID 路径 fail closed。
 - **v0.3.3（已完成）— 联合测试修复**：补齐审批、取消、调度与结果证据，并保守识别 AgentTape fenced 工具。
-- **v0.3.4（当前）— 协议兼容证明**：发布协议支持矩阵与 Conformance corpus，覆盖 MCP 新旧生命周期。
-- **v0.4（下一阶段）— 跨平台统一执行**：Windows 安全审批、本地 Host 一致性、版本化动作模型与审计证据契约。
-- **v0.5-alpha（条件阶段）— 受限 Streamable HTTP**：先完成拓扑、授权与威胁模型，再验证一个窄范围远程传输路径。
+- **v0.3.4（已完成）— 协议兼容证明**：发布协议支持矩阵与 Conformance corpus，覆盖 MCP 新旧生命周期；未验证或未支持组合保持 fail closed。
+- **v0.4（当前）— 跨平台统一执行**：Windows 安全审批、本地 Host 一致性、版本化动作模型与审计证据契约。
+- **v0.5-alpha（下一阶段）— 受限 Streamable HTTP**：先完成拓扑、授权与威胁模型，再验证一个窄范围远程传输路径。
 - **v1.0（稳定承诺）**：稳定 Schema 与迁移规则、可重复兼容证据、独立安全审阅和真实用户验证。
 
 进程隔离、篡改可检测审计、Desktop Extension 和团队控制台均为有前置条件的决策门，不随某个版本号自动承诺。
@@ -434,11 +437,11 @@ toolfence policy test --policy ./policy.yaml --cases ./policy-cases.yaml
 - 对原始结果进行通用敏感信息脱敏。
 - MCP Streamable HTTP 代理。
 
-## 4. 当前路线：从 v0.3.3 到稳定兼容承诺
+## 4. 当前路线：从 v0.3.4 到稳定兼容承诺
 
 ### 4.1 规划依据与项目判断
 
-截至 2026-08-30，ToolFence 已完成 `v0.3.3`。当前实现具备较成熟的 stdio 策略代理、POSIX Broker、六个内置 Recipe、默认结果脱敏、Host 配置工具、Doctor、真实集成 fixtures、覆盖率门槛和可信发布流程；安全契约、连接期取消和联合测试发现的证据缺口均已有回归覆盖。公开仓库与 npm 已出现早期关注，但这些发现信号不等于持续使用或留存，尚不足以证明团队控制台、更多 Recipe 或复杂沙箱是优先需求。
+截至 2026-08-31，ToolFence 已完成 `v0.3.4`。当前实现具备较成熟的 stdio 策略代理、POSIX Broker、六个内置 Recipe、默认结果脱敏、Host 配置工具、Doctor、真实集成 fixtures、覆盖率门槛和可信发布流程，并已发布协议兼容矩阵与 Conformance corpus，证明新旧 stdio 协议生命周期下同一动作与策略产生相同决定；安全契约、连接期取消和联合测试发现的证据缺口均已有回归覆盖。公开仓库与 npm 已出现早期关注，但这些发现信号不等于持续使用或留存，尚不足以证明团队控制台、更多 Recipe 或复杂沙箱是优先需求。
 
 外部协议环境已发生重要变化：
 
@@ -451,7 +454,7 @@ toolfence policy test --policy ./policy.yaml --cases ./policy-cases.yaml
 1. 策略 Schema 允许 `default: allow`，但公开不变量要求未知或歧义动作不能静默放行。
 2. 在途请求跟踪达到容量上限时，必须保证任何晚到结果仍经过脱敏与审计，或在请求进入上游前明确拒绝；不得通过丢弃跟踪记录降级安全路径。
 
-因此，路线顺序调整为：在 `v0.3.3` 收口安全与真实联合测试问题后，由 `v0.3.4` 证明新旧协议兼容，再补齐 Windows 本地审批和跨 Host 证据，最后才以 alpha 方式引入受限 Streamable HTTP。进程隔离与云端产品继续保持为条件决策。
+因此，路线顺序为：`v0.3.3` 收口安全与真实联合测试问题，`v0.3.4` 完成新旧协议兼容证明（矩阵、corpus、四态状态词汇与 fail-closed 保证），`v0.4` 补齐 Windows 本地审批和跨 Host 证据，最后才以 alpha 方式引入受限 Streamable HTTP。进程隔离与云端产品继续保持为条件决策。
 
 ### 4.2 优先级原则
 
@@ -462,11 +465,18 @@ toolfence policy test --policy ./policy.yaml --cases ./policy-cases.yaml
 5. **Host 审批是互补控制**：不能假设交互提示在 headless、SDK、cloud 或自动运行模式一定存在。
 6. **真实采用决定重投入**：在设计合作用户验证前，不建设远程控制台、策略云同步或大规模平台包装。
 
-### 4.3 当前阶段：v0.3.4 协议 Conformance
+### 4.3 已完成阶段：v0.3.4 协议 Conformance
 
 阶段目标是不增加新的信任边界，而是让当前协议兼容能力可证明、可诊断、可发布。
 
 起点状态（2026-08-30）：`v0.3.3` 已修复两个安全契约偏差、联合测试证据缺口和连接期取消竞态；协议兼容矩阵与 Conformance corpus 仍待完成。
+
+交付结果（2026-08-31）：
+
+- 机器可读 stdio 协议兼容矩阵 `conformance/matrix.json` 与带日期报告 `conformance/report.json`；矩阵行采用 `supported`/`experimental`/`unverified`/`unsupported` 状态词汇，`npm run conformance` 生成报告，`npm run release:check` 强制所有 `supported` 行的每个声明协议修订都通过同一套 corpus，并校验报告与矩阵的版本和 matrixVersion 一致。
+- 共享 Conformance corpus（`conformance/corpus.mjs` + `test/conformance.test.ts`）覆盖 `allow`/`ask`/`deny`、未知或歧义动作、混合资源、取消和 Schema 变化；旧握手协议的每个声明修订（`2024-11-05`、`2025-06-18`）与 `2026-07-28` 无状态协议的对等调用决定一致率为 100%。
+- 旧协议 fixture（`test/fixtures/legacy-init-server.mjs`）覆盖 `initialize`/`initialized` 生命周期（fixture 记录 `initialized` 通知确实到达）与无缓存元数据的 `tools/list`；`2026-07-28` fixture（`test/fixtures/protocol-2026-server.mjs`）覆盖 `server/discover`、每请求 `_meta`、列表缓存元数据（`resultType`/`ttlMs`/`cacheScope`）与 MRTR `input_required`/`inputResponses` 双向原样透传。这些 fixture 只证明透明透传，不表示 ToolFence 实现或宣称支持这些上层能力。
+- Doctor 新增 `conformance` 检查并区分四态；缺失报告、版本不匹配、matrixVersion 不一致、报告无日期或某声明修订缺少通过证据时只降级为 warn/fail，绝不扩大权限。协议修订元数据中性已由专项用例证明：带未验证协议版本（如 `2999-01-01`）的请求与已验证版本产生相同决定，且 payload 被原样透传。
 
 必须完成：
 
@@ -485,7 +495,7 @@ toolfence policy test --policy ./policy.yaml --cases ./policy-cases.yaml
 
 本阶段不实现 Windows 交互审批、Streamable HTTP、OAuth、进程隔离、新远程服务或没有用户证据的新 Recipe。
 
-### 4.4 下一阶段：v0.4 跨平台统一执行
+### 4.4 当前阶段：v0.4 跨平台统一执行
 
 阶段目标是让受支持的本地 Host 在 macOS、Linux 和原生 Windows 上获得同一审批与证据契约。
 

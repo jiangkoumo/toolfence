@@ -50,6 +50,61 @@ for (const file of [
   requireCondition(existsSync(resolve(root, file)), `${file} is missing`);
 }
 
+// Protocol conformance evidence: the matrix and its dated report are release
+// artifacts, and every `supported` matrix row must have a passing corpus run.
+requireCondition(existsSync(resolve(root, "conformance/matrix.json")), "conformance/matrix.json is missing");
+requireCondition(packageJson.files?.includes("conformance"), "conformance evidence is not included in the npm package");
+const conformanceMatrix = JSON.parse(read("conformance/matrix.json"));
+requireCondition(
+  typeof conformanceMatrix.toolfenceVersion === "string" && conformanceMatrix.toolfenceVersion.length > 0,
+  "conformance matrix must declare a non-empty toolfenceVersion",
+);
+requireCondition(
+  Number.isInteger(conformanceMatrix.matrixVersion),
+  "conformance matrix must declare an integer matrixVersion",
+);
+requireCondition(
+  conformanceMatrix.toolfenceVersion === packageJson.version,
+  `conformance matrix identifies ${conformanceMatrix.toolfenceVersion} but package is ${packageJson.version}`,
+);
+const conformanceStatuses = ["supported", "experimental", "unverified", "unsupported"];
+requireCondition(
+  Array.isArray(conformanceMatrix.rows) && conformanceMatrix.rows.length > 0 &&
+    conformanceMatrix.rows.every((row) =>
+      typeof row.id === "string" && conformanceStatuses.includes(row.status)),
+  "conformance matrix rows must each declare an id and a status in supported/experimental/unverified/unsupported",
+);
+for (const row of conformanceMatrix.rows.filter((candidate) => candidate.status === "supported")) {
+  requireCondition(existsSync(resolve(root, row.server ?? "")), `supported conformance row ${row.id} fixture ${row.server} is missing`);
+}
+requireCondition(existsSync(resolve(root, "conformance/report.json")), "conformance/report.json is missing; run npm run conformance before release");
+const conformanceReport = JSON.parse(read("conformance/report.json"));
+requireCondition(
+  Number.isInteger(conformanceReport.matrixVersion),
+  "conformance report must declare an integer matrixVersion",
+);
+requireCondition(
+  conformanceReport.toolfenceVersion === packageJson.version,
+  `conformance report identifies ${conformanceReport.toolfenceVersion} but package is ${packageJson.version}`,
+);
+requireCondition(
+  conformanceReport.matrixVersion === conformanceMatrix.matrixVersion,
+  `conformance report matrixVersion ${conformanceReport.matrixVersion} does not match the matrix version ${conformanceMatrix.matrixVersion}`,
+);
+requireCondition(
+  typeof conformanceReport.generatedAt === "string" && conformanceReport.generatedAt.length > 0,
+  "conformance report has no generatedAt evidence date",
+);
+for (const row of conformanceMatrix.rows.filter((candidate) => candidate.status === "supported")) {
+  for (const revision of row.mcpProtocol ?? []) {
+    requireCondition(
+      conformanceReport.rows?.some((entry) =>
+        entry.id === row.id && entry.revision === revision && entry.status === "pass"),
+      `conformance report does not record a passing corpus run for supported row ${row.id} on protocol revision ${revision}`,
+    );
+  }
+}
+
 requireCondition(
   read("CHANGELOG.md").includes(`## [${packageJson.version}]`),
   `CHANGELOG.md has no ${packageJson.version} release entry`,

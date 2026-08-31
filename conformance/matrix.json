@@ -1,0 +1,96 @@
+{
+  "matrixVersion": 1,
+  "statuses": [
+    "supported",
+    "experimental",
+    "unverified",
+    "unsupported"
+  ],
+  "evidenceContext": {
+    "os": [
+      "macos-latest",
+      "ubuntu-latest"
+    ],
+    "node": [
+      20,
+      22,
+      24
+    ],
+    "transport": [
+      "stdio"
+    ],
+    "hosts": [
+      "generic-mcp-client"
+    ]
+  },
+  "rows": [
+    {
+      "id": "stdio-legacy-init",
+      "style": "legacy",
+      "transport": "stdio",
+      "mcpProtocol": [
+        "2024-11-05",
+        "2025-06-18"
+      ],
+      "node": [
+        20,
+        22,
+        24
+      ],
+      "server": "test/fixtures/legacy-init-server.mjs",
+      "corpus": "conformance/corpus.mjs",
+      "status": "supported",
+      "notes": "Legacy lifecycle: initialize/initialized handshake, tools/list without cache metadata, per-call params carry name and arguments only. The corpus proves transparent pass-through and identical policy decisions with the stateless revision."
+    },
+    {
+      "id": "stdio-2026-stateless",
+      "style": "modern",
+      "transport": "stdio",
+      "mcpProtocol": [
+        "2026-07-28"
+      ],
+      "node": [
+        20,
+        22,
+        24
+      ],
+      "server": "test/fixtures/protocol-2026-server.mjs",
+      "corpus": "conformance/corpus.mjs",
+      "status": "supported",
+      "notes": "Stateless lifecycle: server/discover, per-request _meta carrying protocol version/client identity/trace context, list cache metadata (resultType/ttlMs/cacheScope), and MRTR input_required/inputResponses pass-through. Proves transparent pass-through only; ToolFence does not implement or claim these higher-level capabilities."
+    },
+    {
+      "id": "stdio-windows-broker",
+      "transport": "stdio",
+      "mcpProtocol": [
+        "2024-11-05",
+        "2025-06-18",
+        "2026-07-28"
+      ],
+      "node": [
+        20,
+        22,
+        24
+      ],
+      "server": null,
+      "status": "unsupported",
+      "notes": "Interactive Broker on native Windows is not implemented; Windows remains non-interactive and fail-closed. Tracked in ROADMAP v0.4."
+    },
+    {
+      "id": "streamable-http",
+      "transport": "streamable-http",
+      "mcpProtocol": [
+        "2026-07-28"
+      ],
+      "node": [
+        20,
+        22,
+        24
+      ],
+      "server": null,
+      "status": "unsupported",
+      "notes": "Streamable HTTP transport is not implemented. Requires a dedicated topology, authorization, and threat-model review before any claim. Tracked in ROADMAP v0.5-alpha."
+    }
+  ],
+  "toolfenceVersion": "0.3.4"
+}

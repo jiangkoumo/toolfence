@@ -1,6 +1,6 @@
 {
   "name": "toolfence-mcp",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Local, fail-closed policy enforcement and human approval for MCP tool calls.",
   "repository": {
     "type": "git",
@@ -27,20 +27,21 @@
     "toolfence": "dist/cli.js"
   },
   "files": [
-    "dist",
-    "docs",
-    "examples",
-    "ROADMAP.md",
-    "DEVELOPMENT.md",
-    "TESTING.md",
-    "REVIEW.md",
-    "RELEASING.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
-    "SECURITY.md",
+    "DEVELOPMENT.md",
     "DISCLOSURE",
+    "LICENSE",
     "README.md",
-    "LICENSE"
+    "RELEASING.md",
+    "REVIEW.md",
+    "ROADMAP.md",
+    "SECURITY.md",
+    "TESTING.md",
+    "conformance",
+    "dist",
+    "docs",
+    "examples"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -57,8 +58,9 @@
     "test:coverage": "vitest run --coverage",
     "test:package": "node scripts/package-smoke.mjs",
     "release:check": "node scripts/release-check.mjs",
-    "verify": "npm run typecheck && npm run test:coverage && npm run build && npm run test:demo && npm run test:demo:env && npm run test:package && npm pack --dry-run",
-    "prepublishOnly": "npm run release:check && npm run verify"
+    "verify": "npm run typecheck && npm run test:coverage && npm run conformance && npm run build && npm run test:demo && npm run test:demo:env && npm run test:package && npm pack --dry-run",
+    "prepublishOnly": "npm run release:check && npm run verify",
+    "conformance": "node scripts/conformance.mjs"
   },
   "engines": {
     "node": ">=20"

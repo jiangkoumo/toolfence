@@ -15,3 +15,7 @@ You should receive an acknowledgement within seven days. Publication and remedia
 ## Security boundary
 
 ToolFence mediates MCP calls that cross its stdio proxy. It does not sandbox the upstream server process or prevent that process from directly using its operating-system permissions. See the security boundary in [README.md](README.md) before deployment.
+
+## Protocol compatibility
+
+Compatibility claims follow the `supported`/`experimental`/`unverified`/`unsupported` vocabulary in [`conformance/matrix.json`](conformance/matrix.json). Unverified or unsupported protocol revisions, transports, or combinations never expand permissions: policy decisions are deterministic for every protocol shape and unknown or ambiguous actions cannot inherit `default: allow`. If you hit an unexpected decision on a protocol revision or Host combination not listed as `supported`, report it with the ToolFence and Node.js versions, the MCP protocol revision, and the expected versus observed decision.
