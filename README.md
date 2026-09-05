@@ -91,7 +91,7 @@ ToolFence is designed to complement host approvals and OS isolation. It is not a
 
 ## Status
 
-Version 0.3.4 adds reproducible protocol conformance evidence: a machine-readable compatibility matrix with a supported/experimental/unverified/unsupported status vocabulary, a shared conformance corpus proving identical policy decisions across the legacy handshake and the `2026-07-28` stateless stdio revisions, and transparent pass-through fixtures for `server/discover`, per-request `_meta`, list cache metadata, and MRTR. It joins the existing cancellation-safe Broker handling, precise approval and dispatch evidence, MCP `isError` result semantics, and conservative AgentTape integration.
+Version 0.4.0 establishes the cross-platform enforcement baseline: a platform-neutral Broker IPC abstraction with user-scoped Windows Named Pipe support, private credential storage enforcement without misleading POSIX mode emulation, a versioned action model (`1.0`) with conservative downgrade rules, a versioned audit evidence schema (`v1`) correlating Host, protocol revision, tool fingerprints, and non-forwarding evidence, and Host-native tool bypass disclosures for Codex, Cursor, Claude Code, and Claude Desktop. This builds on the reproducible protocol conformance evidence, cancellation-safe Broker handling, precise approval and dispatch evidence, MCP `isError` result semantics, and conservative AgentTape integration.
 
 ToolFence is **not a sandbox for a malicious MCP server process**: the upstream process still runs with the current user's operating-system permissions.
 

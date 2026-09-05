@@ -13,6 +13,20 @@ export const supportedHosts = [
 
 export type SupportedHost = (typeof supportedHosts)[number];
 
+export interface HostNativeBypassTool {
+  name: string;
+  category: "shell" | "filesystem" | "mcp-direct";
+  description: string;
+  risk: "high" | "medium";
+}
+
+export interface HostSecurityProfile {
+  host: SupportedHost;
+  displayName: string;
+  nativeBypassTools: HostNativeBypassTool[];
+  bypassWarning: string;
+}
+
 export interface HostConfigOptions {
   host: SupportedHost;
   server?: string;
@@ -33,6 +47,7 @@ export interface HostSnippetResult {
   format: "json" | "toml";
   snippet: Record<string, unknown> | string;
   rendered: string;
+  securityProfile: HostSecurityProfile;
 }
 
 export interface HostInjectResult {
@@ -43,6 +58,7 @@ export interface HostInjectResult {
   updated: boolean;
   backupPath?: string;
   content: string;
+  securityProfile: HostSecurityProfile;
 }
 
 export function normalizeHost(input: string): SupportedHost {
@@ -52,6 +68,102 @@ export function normalizeHost(input: string): SupportedHost {
   if (normalized === "claude-code" || normalized === "claudecode") return "claude-code";
   if (normalized === "codex") return "codex";
   throw new Error(`Unsupported host: ${input}. Supported hosts: ${supportedHosts.join(", ")}`);
+}
+
+const hostSecurityProfiles: Record<SupportedHost, HostSecurityProfile> = {
+  codex: {
+    host: "codex",
+    displayName: "Codex CLI",
+    nativeBypassTools: [
+      {
+        name: "exec",
+        category: "shell",
+        description: "Built-in shell command execution executed directly on the host system",
+        risk: "high",
+      },
+      {
+        name: "file_search / file_edit",
+        category: "filesystem",
+        description: "Built-in filesystem inspection and editing operated outside MCP",
+        risk: "high",
+      },
+    ],
+    bypassWarning:
+      "Codex provides built-in tools (exec, file_search, file_edit) that operate directly on the host without passing through MCP. ToolFence only mediates MCP tool calls configured in config.toml.",
+  },
+  cursor: {
+    host: "cursor",
+    displayName: "Cursor IDE",
+    nativeBypassTools: [
+      {
+        name: "Terminal / bash",
+        category: "shell",
+        description: "Integrated terminal and agent bash execution executed inside the workspace",
+        risk: "high",
+      },
+      {
+        name: "Composer / File Edit",
+        category: "filesystem",
+        description: "Native editor code generation and file modification operated by the IDE",
+        risk: "high",
+      },
+    ],
+    bypassWarning:
+      "Cursor provides integrated terminal and Composer file-editing capabilities that bypass MCP proxies. ToolFence only mediates MCP tool calls configured in .cursor/mcp.json.",
+  },
+  "claude-code": {
+    host: "claude-code",
+    displayName: "Claude Code CLI",
+    nativeBypassTools: [
+      {
+        name: "Bash",
+        category: "shell",
+        description: "Direct shell execution tool executing commands on the host system",
+        risk: "high",
+      },
+      {
+        name: "GlobTool / GrepTool / FileEditTool",
+        category: "filesystem",
+        description: "Built-in filesystem traversal, pattern search, and file modification",
+        risk: "high",
+      },
+    ],
+    bypassWarning:
+      "Claude Code includes built-in tools (Bash, FileEditTool, GrepTool, GlobTool) that run directly on your machine outside MCP. ToolFence only mediates external MCP tool calls declared in .claude.json.",
+  },
+  "claude-desktop": {
+    host: "claude-desktop",
+    displayName: "Claude Desktop",
+    nativeBypassTools: [
+      {
+        name: "Direct MCP Servers",
+        category: "mcp-direct",
+        description: "Any unmediated MCP servers listed in claude_desktop_config.json",
+        risk: "medium",
+      },
+    ],
+    bypassWarning:
+      "Claude Desktop does not expose a native shell tool, but any MCP servers configured directly without ToolFence wrapping will run unmediated.",
+  },
+  claude: {
+    host: "claude-desktop",
+    displayName: "Claude Desktop",
+    nativeBypassTools: [
+      {
+        name: "Direct MCP Servers",
+        category: "mcp-direct",
+        description: "Any unmediated MCP servers listed in claude_desktop_config.json",
+        risk: "medium",
+      },
+    ],
+    bypassWarning:
+      "Claude Desktop does not expose a native shell tool, but any MCP servers configured directly without ToolFence wrapping will run unmediated.",
+  },
+};
+
+export function getHostSecurityProfile(host: SupportedHost): HostSecurityProfile {
+  const normalized = normalizeHost(host);
+  return hostSecurityProfiles[normalized];
 }
 
 export function resolveHostConfigPath(
@@ -147,6 +259,7 @@ export function generateHostSnippet(options: HostConfigOptions): HostSnippetResu
       format: "toml",
       snippet: toml,
       rendered: toml,
+      securityProfile: getHostSecurityProfile(host),
     };
   }
 
@@ -168,6 +281,7 @@ export function generateHostSnippet(options: HostConfigOptions): HostSnippetResu
     format: "json",
     snippet: jsonSnippet,
     rendered: JSON.stringify(jsonSnippet, null, 2),
+    securityProfile: getHostSecurityProfile(host),
   };
 }
 
@@ -248,5 +362,6 @@ export function injectHostConfig(options: HostConfigOptions): HostInjectResult {
     updated: exists,
     backupPath,
     content: finalContent,
+    securityProfile: snippetResult.securityProfile,
   };
 }

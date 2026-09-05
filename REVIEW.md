@@ -52,5 +52,9 @@ Review findings fixed before sign-off:
 - Added text and JSON Doctor reports with explicit upstream startup probing and POSIX process-group cleanup.
 - Implemented output secret redaction (DLP) covering tool results and errors with fail-closed termination on redaction failure.
 - Implemented built-in Policy Recipes (`filesystem`, `github`, `fetch`, `sqlite`, `postgres`, `git`) with CLI `--recipe` and `--list-recipes` support and private IPv4/IPv6 address blocks for Fetch.
+- Implemented platform-neutral Broker IPC abstraction supporting Windows user-scoped Named Pipes (`\\\\.\\pipe\\toolfence-<hash>`) with private credential storage enforcement without emulating misleading POSIX modes.
+- Versioned Normalized Action Model (`ACTION_MODEL_VERSION = "1.0"`) with conservative downgrade rules in PolicyEngine ensuring unsupported versions never inherit default allow.
+- Established versioned Audit Evidence Schema (`auditSchemaVersion: 1`) correlating Host, protocol revision, tool schema fingerprint, action-model version, policy hash, and non-forwarding evidence without logging raw arguments or raw results.
+- Added Host native tool bypass disclosure (`HostSecurityProfile`) for Codex, Cursor, Claude Code, and Claude Desktop, explicitly detailing unmediated built-in tools (such as native shell `exec`/`Bash` and direct workspace editing) in CLI and JSON formats.
 
 Status: passed local implementation, security, coverage, dependency audit, package, and patch review. The clean-tree release check, final CI matrix, and trusted-publisher workflow remain publication gates.

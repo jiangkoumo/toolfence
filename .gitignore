@@ -6,3 +6,6 @@ coverage/
 *.log
 *.tgz
 .DS_Store
+output/
+tests/
+

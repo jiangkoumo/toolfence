@@ -3,6 +3,8 @@ import { dirname, resolve } from "node:path";
 import type { ApprovalResolution } from "./approval.js";
 import { operations, type Decision, type JsonRpcId, type NormalizedAction } from "./types.js";
 
+export const AUDIT_SCHEMA_VERSION = 1;
+
 export type AuditDispatch = "forwarded" | "not-forwarded";
 
 export interface AuditCorrelation {
@@ -16,18 +18,33 @@ export interface AuditDecisionContext extends AuditCorrelation {
   dispatch?: AuditDispatch;
 }
 
+export interface AuditEvidenceContext extends AuditDecisionContext {
+  host?: string;
+  protocolRevision?: string;
+  toolFingerprint?: string;
+  actionModelVersion?: string;
+  policyHash?: string;
+}
+
 export type AuditEvent =
   | {
       event: "decision";
+      auditSchemaVersion: number;
       requestId: JsonRpcId;
       action: Pick<
         NormalizedAction,
         "operation" | "resources" | "server" | "tool" | "executable"
       >;
       decision: Decision;
+      host?: string;
+      protocolRevision?: string;
+      toolFingerprint?: string;
+      actionModelVersion?: string;
+      policyHash?: string;
     } & AuditDecisionContext
   | {
       event: "result";
+      auditSchemaVersion: number;
       requestId: JsonRpcId;
       resultHash: string;
       error: boolean;
@@ -97,6 +114,10 @@ function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
       throw new Error(`Invalid decision audit record on line ${lineNumber}`);
     }
     const effect = value.decision.effect;
+    const schemaVersion = value.auditSchemaVersion !== undefined ? value.auditSchemaVersion : 1;
+    if (typeof schemaVersion !== "number" || !Number.isInteger(schemaVersion) || schemaVersion < 1) {
+      throw new Error(`Invalid decision audit record on line ${lineNumber}: malformed auditSchemaVersion`);
+    }
     if (
       !isRequestId(value.requestId) ||
       !operations.includes(value.action.operation as NormalizedAction["operation"]) ||
@@ -110,13 +131,19 @@ function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
       (value.decision.ruleId !== undefined && typeof value.decision.ruleId !== "string") ||
       (value.approvalId !== undefined && typeof value.approvalId !== "string") ||
       (value.resolution !== undefined && !isApprovalResolution(value.resolution)) ||
-      (value.dispatch !== undefined && !isAuditDispatch(value.dispatch))
+      (value.dispatch !== undefined && !isAuditDispatch(value.dispatch)) ||
+      (value.host !== undefined && typeof value.host !== "string") ||
+      (value.protocolRevision !== undefined && typeof value.protocolRevision !== "string") ||
+      (value.toolFingerprint !== undefined && typeof value.toolFingerprint !== "string") ||
+      (value.actionModelVersion !== undefined && typeof value.actionModelVersion !== "string") ||
+      (value.policyHash !== undefined && typeof value.policyHash !== "string")
     ) {
       throw new Error(`Invalid decision audit record on line ${lineNumber}`);
     }
     return {
       timestamp: value.timestamp,
       event: "decision",
+      auditSchemaVersion: schemaVersion,
       requestId: value.requestId,
       action: {
         operation: value.action.operation as NormalizedAction["operation"],
@@ -134,10 +161,19 @@ function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
       ...(value.approvalId !== undefined ? { approvalId: value.approvalId as string } : {}),
       ...(value.resolution !== undefined ? { resolution: value.resolution as ApprovalResolution } : {}),
       ...(value.dispatch !== undefined ? { dispatch: value.dispatch as AuditDispatch } : {}),
+      ...(value.host !== undefined ? { host: value.host as string } : {}),
+      ...(value.protocolRevision !== undefined ? { protocolRevision: value.protocolRevision as string } : {}),
+      ...(value.toolFingerprint !== undefined ? { toolFingerprint: value.toolFingerprint as string } : {}),
+      ...(value.actionModelVersion !== undefined ? { actionModelVersion: value.actionModelVersion as string } : {}),
+      ...(value.policyHash !== undefined ? { policyHash: value.policyHash as string } : {}),
     };
   }
   if (value.event === "result") {
     const correlation = parseAuditCorrelation(value, lineNumber);
+    const schemaVersion = value.auditSchemaVersion !== undefined ? value.auditSchemaVersion : 1;
+    if (typeof schemaVersion !== "number" || !Number.isInteger(schemaVersion) || schemaVersion < 1) {
+      throw new Error(`Invalid result audit record on line ${lineNumber}: malformed auditSchemaVersion`);
+    }
     if (
       !isRequestId(value.requestId) ||
       typeof value.resultHash !== "string" ||
@@ -149,6 +185,7 @@ function parseAuditRecord(line: string, lineNumber: number): AuditRecord {
     return {
       timestamp: value.timestamp,
       event: "result",
+      auditSchemaVersion: schemaVersion,
       requestId: value.requestId,
       resultHash: value.resultHash,
       error: value.error,
@@ -214,7 +251,7 @@ export class AuditLogger {
     requestId: JsonRpcId,
     action: NormalizedAction,
     decision: Decision,
-    context?: AuditDecisionContext,
+    context?: AuditEvidenceContext,
   ): void {
     const safeAction = {
       operation: action.operation,
@@ -223,7 +260,15 @@ export class AuditLogger {
       tool: action.tool,
       executable: action.executable,
     };
-    this.write({ event: "decision", requestId, action: safeAction, decision, ...context });
+    this.write({
+      event: "decision",
+      auditSchemaVersion: AUDIT_SCHEMA_VERSION,
+      requestId,
+      action: safeAction,
+      decision,
+      actionModelVersion: context?.actionModelVersion ?? action.actionModelVersion,
+      ...context,
+    });
   }
 
   result(
@@ -235,6 +280,7 @@ export class AuditLogger {
   ): void {
     this.write({
       event: "result",
+      auditSchemaVersion: AUDIT_SCHEMA_VERSION,
       requestId,
       resultHash,
       error,

@@ -41,6 +41,10 @@ Compatibility claims use the `supported`/`experimental`/`unverified`/`unsupporte
 - An unverified protocol revision in per-request `_meta` produces the same decision and forwarding as the verified revision (protocol metadata neutrality), and the payload still reaches the upstream verbatim.
 - Cancellation while awaiting approval never forwards and leaves no audit decision, identically under the legacy and `2026-07-28` protocol styles.
 - The same normalized action and policy produce identical decisions on every protocol revision declared by the supported legacy and `2026-07-28` stdio rows of the compatibility matrix; Schema fingerprints are identical across revisions and still change when the tool Schema changes.
+- Platform-neutral Broker transport supports POSIX Unix Domain Sockets and Windows user-scoped Named Pipes (`\\\\.\\pipe\\toolfence-<hash>`); Windows credential storage enforces user-home containment for `broker.token` and fails closed on unverified or escaping paths.
+- Unsupported or future Action Model versions (`ACTION_MODEL_VERSION = "1.0"`) conservatively downgrade to unknown actions, forcing approval under `default: allow` and denying under `default: deny`.
+- Versioned Audit Evidence records (`auditSchemaVersion: 1`) correlate Host, protocol revision, tool schema fingerprint, action-model version, and policy hash, while strictly rejecting raw tool arguments or raw results.
+- Host native tool bypass disclosures (`HostSecurityProfile`) document unmediated built-in tools (e.g. native shell `exec`/`Bash` and direct workspace editing) for Codex, Cursor, Claude Code, and Claude Desktop.
 
 ## CI matrix
 
@@ -54,4 +58,4 @@ npm audit --omit=dev
 
 `npm run verify` includes the conformance gate, so every CI cell regenerates `conformance/report.json` for its own OS × Node.js cell; the report records the generating environment and date. The release commit keeps the matrix and report synchronized with the package version.
 
-Windows Broker transport is not implemented in the current release and remains fail-closed. Its security and CI gates are tracked in [`ROADMAP.md`](ROADMAP.md).
+Windows Broker transport uses user-scoped Named Pipes with strict user-home credential storage verification; interactive approvals and Doctor checks fail closed on insecure paths. Tracked as experimental in the compatibility matrix.

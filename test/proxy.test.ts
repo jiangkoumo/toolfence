@@ -450,4 +450,70 @@ describe("stdio proxy", () => {
     test.input.end();
     await test.controller.closed;
   });
+
+  it("correlates protocolRevision, actionModelVersion, and policyHash into decision audit records", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "toolfence-proxy-evidence-"));
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const errors = new PassThrough();
+    const auditPath = join(workspace, "audit.jsonl");
+    const policy = new PolicyEngine(
+      parsePolicy({
+        version: 1,
+        default: "allow",
+        rules: [],
+      }),
+      { workspace, home: workspace },
+    );
+
+    const controller = startProxy({
+      command: process.execPath,
+      args: [fixture],
+      cwd: workspace,
+      server: "echo",
+      policy,
+      approval: alwaysApprove,
+      audit: new AuditLogger(auditPath),
+      input,
+      output,
+      errorOutput: errors,
+      host: "cursor",
+      policyHash: "test-policy-sha256",
+    });
+
+    // 1. tools/list populates tool fingerprints
+    input.write(`${JSON.stringify({ jsonrpc: "2.0", id: 10, method: "tools/list" })}\n`);
+    await waitForLine(output);
+
+    // 2. tools/call carries _meta protocol version
+    input.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: 11,
+      method: "tools/call",
+      params: {
+        name: "read_file",
+        arguments: { path: "README.md" },
+        _meta: { protocolVersion: "2026-07-28" },
+      },
+    })}\n`);
+    await waitForLine(output);
+
+    input.end();
+    await controller.closed;
+
+    const records = readAudit(auditPath);
+    const decisionRecord = records.find((r) => r.event === "decision");
+    expect(decisionRecord).toBeDefined();
+    expect(decisionRecord).toMatchObject({
+      event: "decision",
+      auditSchemaVersion: 1,
+      requestId: 11,
+      host: "cursor",
+      protocolRevision: "2026-07-28",
+      actionModelVersion: "1.0",
+      policyHash: "test-policy-sha256",
+    });
+    expect(decisionRecord?.toolFingerprint).toBeDefined();
+    expect(typeof decisionRecord?.toolFingerprint).toBe("string");
+  });
 });

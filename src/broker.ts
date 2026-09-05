@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, win32 } from "node:path";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import { createInterface } from "node:readline";
 import type {
@@ -24,11 +24,20 @@ import { operations } from "./types.js";
 export const brokerProtocolVersion = 1;
 export type BrokerDecision = ApprovalResolution;
 export type BrokerCancelReason = "client-cancelled" | "timeout" | "proxy-closed";
+export type BrokerTransportType = "unix" | "named-pipe";
 
 export interface BrokerPaths {
   runtimeDir: string;
   socketPath: string;
   tokenPath: string;
+  transport?: BrokerTransportType;
+}
+
+export interface BrokerStatusResult {
+  protocolVersion: number;
+  socketMode: number;
+  transport: BrokerTransportType;
+  platform: NodeJS.Platform;
 }
 
 export interface ApprovalRequestMessage {
@@ -43,12 +52,57 @@ export interface ApprovalRequestMessage {
   expiresAt: string;
 }
 
+export function isNamedPipePath(path: string): boolean {
+  const prefix = path.startsWith("\\\\.\\pipe\\")
+    ? "\\\\.\\pipe\\"
+    : path.startsWith("//./pipe/")
+      ? "//./pipe/"
+      : null;
+  if (!prefix) return false;
+  const name = path.slice(prefix.length);
+  return name.length > 0 && !name.includes("..") && !name.includes("/") && !name.includes("\\");
+}
+
+export function verifyWindowsSecurity(paths: BrokerPaths, userHome = homedir()): void {
+  if (!isNamedPipePath(paths.socketPath)) {
+    throw new Error(
+      `Insecure Windows configuration: socketPath must be a local named pipe (\\\\.\\pipe\\...), got ${paths.socketPath}`,
+    );
+  }
+  const isWin = process.platform === "win32";
+  const pathMod = isWin ? win32 : (paths.tokenPath.includes("\\") ? win32 : { resolve, relative, isAbsolute });
+  const resolvedToken = pathMod.resolve(paths.tokenPath);
+  const resolvedHome = pathMod.resolve(userHome);
+  const rel = pathMod.relative(resolvedHome, resolvedToken);
+  if (rel.startsWith("..") || pathMod.isAbsolute(rel)) {
+    throw new Error(
+      `Insecure Windows configuration: tokenPath ${paths.tokenPath} must be inside user home ${userHome}`,
+    );
+  }
+}
+
 export function defaultBrokerPaths(
   env: NodeJS.ProcessEnv = process.env,
   userHome = homedir(),
+  platform: NodeJS.Platform = process.platform,
 ): BrokerPaths {
+  if (platform === "win32") {
+    const username = env.USERNAME || env.USER || "user";
+    const userHash = createHash("sha256")
+      .update(`${userHome}\0${username}`)
+      .digest("hex")
+      .slice(0, 16);
+    return {
+      transport: "named-pipe",
+      runtimeDir: win32.join(userHome, ".toolfence", "runtime"),
+      socketPath: `\\\\.\\pipe\\toolfence-${userHash}`,
+      tokenPath: win32.join(userHome, ".toolfence", "broker.token"),
+    };
+  }
+
   const uid = typeof process.getuid === "function" ? String(process.getuid()) : "user";
   const requested = {
+    transport: "unix" as const,
     runtimeDir: join(env.XDG_RUNTIME_DIR || env.TMPDIR || tmpdir(), `toolfence-${uid}`),
     tokenPath: join(userHome, ".toolfence", "broker.token"),
   };
@@ -59,11 +113,12 @@ export function defaultBrokerPaths(
 }
 
 function normalizeBrokerPaths(paths: BrokerPaths): BrokerPaths {
-  if (Buffer.byteLength(paths.socketPath) <= 96) return paths;
+  if (isNamedPipePath(paths.socketPath) || Buffer.byteLength(paths.socketPath) <= 96) return paths;
   const uid = typeof process.getuid === "function" ? String(process.getuid()) : "user";
   const suffix = createHash("sha256").update(paths.socketPath).digest("hex").slice(0, 12);
   const runtimeDir = join("/tmp", `toolfence-${uid}-${suffix}`);
   return {
+    transport: paths.transport ?? "unix",
     runtimeDir,
     socketPath: join(runtimeDir, "broker.sock"),
     tokenPath: paths.tokenPath,
@@ -156,21 +211,36 @@ export interface BrokerController {
   close(): Promise<void>;
 }
 
-export async function startBroker(paths = defaultBrokerPaths()): Promise<BrokerController> {
-  if (process.platform === "win32") throw new Error("local Broker is not supported on Windows");
-  const actualPaths = normalizeBrokerPaths(paths);
-  mkdirSync(actualPaths.runtimeDir, { recursive: true, mode: 0o700 });
-  chmodSync(actualPaths.runtimeDir, 0o700);
-  mkdirSync(dirname(actualPaths.tokenPath), { recursive: true, mode: 0o700 });
-  if (existsSync(actualPaths.socketPath)) {
-    if (await socketIsLive(actualPaths.socketPath)) {
-      throw new Error(`a ToolFence Broker is already listening at ${actualPaths.socketPath}`);
-    }
+export async function startBroker(
+  paths = defaultBrokerPaths(),
+  platform: NodeJS.Platform = process.platform,
+  userHome = homedir(),
+): Promise<BrokerController> {
+  const isWindows = platform === "win32" || isNamedPipePath(paths.socketPath);
+  if (isWindows) {
+    verifyWindowsSecurity(paths, userHome);
+  }
+  const actualPaths = isWindows ? paths : normalizeBrokerPaths(paths);
+  if (isWindows) {
+    mkdirSync(actualPaths.runtimeDir, { recursive: true });
+    mkdirSync(dirname(actualPaths.tokenPath), { recursive: true });
+  } else {
+    mkdirSync(actualPaths.runtimeDir, { recursive: true, mode: 0o700 });
+    chmodSync(actualPaths.runtimeDir, 0o700);
+    mkdirSync(dirname(actualPaths.tokenPath), { recursive: true, mode: 0o700 });
+  }
+
+  if (await socketIsLive(actualPaths.socketPath)) {
+    throw new Error(`a ToolFence Broker is already listening at ${actualPaths.socketPath}`);
+  }
+  if (!isWindows && existsSync(actualPaths.socketPath)) {
     unlinkSync(actualPaths.socketPath);
   }
   const token = randomBytes(32).toString("hex");
   writeFileSync(actualPaths.tokenPath, `${token}\n`, { mode: 0o600 });
-  chmodSync(actualPaths.tokenPath, 0o600);
+  if (!isWindows) {
+    chmodSync(actualPaths.tokenPath, 0o600);
+  }
 
   const pending = new Map<string, {
     request: ApprovalRequestMessage;
@@ -274,12 +344,16 @@ export async function startBroker(paths = defaultBrokerPaths()): Promise<BrokerC
     server.once("error", reject);
     server.listen(actualPaths.socketPath, () => {
       server.off("error", reject);
-      try {
-        chmodSync(actualPaths.socketPath, 0o600);
+      if (!isWindows) {
+        try {
+          chmodSync(actualPaths.socketPath, 0o600);
+          resolve();
+        } catch (error) {
+          server.close();
+          reject(error);
+        }
+      } else {
         resolve();
-      } catch (error) {
-        server.close();
-        reject(error);
       }
     });
   });
@@ -294,7 +368,7 @@ export async function startBroker(paths = defaultBrokerPaths()): Promise<BrokerC
       pending.clear();
       for (const client of clients) client.destroy();
       server.close((error) => {
-        if (existsSync(actualPaths.socketPath)) unlinkSync(actualPaths.socketPath);
+        if (!isWindows && existsSync(actualPaths.socketPath)) unlinkSync(actualPaths.socketPath);
         error ? reject(error) : resolve();
       });
     }),
@@ -304,7 +378,12 @@ export async function startBroker(paths = defaultBrokerPaths()): Promise<BrokerC
 async function connectAuthenticated(
   role: "proxy" | "approvals" | "status",
   paths: BrokerPaths,
+  userHome = homedir(),
 ): Promise<Socket> {
+  const isWindows = process.platform === "win32" || isNamedPipePath(paths.socketPath);
+  if (isWindows) {
+    verifyWindowsSecurity(paths, userHome);
+  }
   const token = readFileSync(paths.tokenPath, "utf8").trim();
   const socket = createConnection(paths.socketPath);
   await new Promise<void>((resolve, reject) => {
@@ -344,6 +423,7 @@ export class BrokerApprovalRequester implements ApprovalRequester {
   constructor(
     private readonly paths = defaultBrokerPaths(),
     private readonly timeoutMs = 60_000,
+    private readonly userHome = homedir(),
   ) {}
 
   updateToolFingerprint(server: string, tool: string, fingerprint: string): void {
@@ -382,7 +462,7 @@ export class BrokerApprovalRequester implements ApprovalRequester {
 
     let socket: Socket;
     try {
-      socket = await connectAuthenticated("proxy", this.paths);
+      socket = await connectAuthenticated("proxy", this.paths, this.userHome);
     } catch {
       return { approved: false, approvalId: context.approvalId, resolution: "deny" };
     }
@@ -460,14 +540,33 @@ export class BrokerApprovalRequester implements ApprovalRequester {
   }
 }
 
-export async function brokerStatus(paths = defaultBrokerPaths()): Promise<{ protocolVersion: number; socketMode: number }> {
-  const socket = await connectAuthenticated("status", paths);
+export async function brokerStatus(
+  paths = defaultBrokerPaths(),
+  platform: NodeJS.Platform = process.platform,
+  userHome = homedir(),
+): Promise<BrokerStatusResult> {
+  const isWindows = platform === "win32" || isNamedPipePath(paths.socketPath);
+  if (isWindows) {
+    verifyWindowsSecurity(paths, userHome);
+  }
+  const socket = await connectAuthenticated("status", paths, userHome);
   socket.end();
-  return { protocolVersion: brokerProtocolVersion, socketMode: statSync(paths.socketPath).mode & 0o777 };
+  const socketMode = isWindows
+    ? 0
+    : statSync(paths.socketPath).mode & 0o777;
+  return {
+    protocolVersion: brokerProtocolVersion,
+    socketMode,
+    transport: isWindows ? "named-pipe" : "unix",
+    platform,
+  };
 }
 
-export async function listApprovals(paths = defaultBrokerPaths()): Promise<{ socket: Socket; requests: ApprovalRequestMessage[] }> {
-  const socket = await connectAuthenticated("approvals", paths);
+export async function listApprovals(
+  paths = defaultBrokerPaths(),
+  userHome = homedir(),
+): Promise<{ socket: Socket; requests: ApprovalRequestMessage[] }> {
+  const socket = await connectAuthenticated("approvals", paths, userHome);
   return await new Promise((resolve, reject) => {
     const lines = createInterface({ input: socket, crlfDelay: Infinity });
     socket.once("error", reject);

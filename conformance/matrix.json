@@ -73,8 +73,8 @@
         24
       ],
       "server": null,
-      "status": "unsupported",
-      "notes": "Interactive Broker on native Windows is not implemented; Windows remains non-interactive and fail-closed. Tracked in ROADMAP v0.4."
+      "status": "experimental",
+      "notes": "Platform-neutral Broker IPC abstraction implemented with user-scoped Named Pipe support and strict private credential storage verification; interactive approval exercises owner-scoped access and fail-closed security invariants on Windows."
     },
     {
       "id": "streamable-http",
@@ -92,5 +92,5 @@
       "notes": "Streamable HTTP transport is not implemented. Requires a dedicated topology, authorization, and threat-model review before any claim. Tracked in ROADMAP v0.5-alpha."
     }
   ],
-  "toolfenceVersion": "0.3.4"
+  "toolfenceVersion": "0.4.0"
 }

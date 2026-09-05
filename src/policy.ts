@@ -1,11 +1,12 @@
 import { minimatch } from "minimatch";
 import { canonicalizePath, resourceMatches } from "./paths.js";
-import type {
-  Decision,
-  NormalizedAction,
-  PolicyConfig,
-  PolicyContext,
-  PolicyRule,
+import {
+  ACTION_MODEL_VERSION,
+  type Decision,
+  type NormalizedAction,
+  type PolicyConfig,
+  type PolicyContext,
+  type PolicyRule,
 } from "./types.js";
 
 function matchesAny(value: string, patterns: string[]): boolean {
@@ -74,15 +75,36 @@ export class PolicyEngine {
   }
 
   evaluate(action: NormalizedAction): Decision {
+    const isUnsupportedModel = action.actionModelVersion !== undefined && action.actionModelVersion !== ACTION_MODEL_VERSION;
+    const effectiveAction: NormalizedAction = isUnsupportedModel
+      ? { ...action, operation: "unknown", normalization: "unknown" }
+      : action;
+
     const matches = this.config.rules.filter((rule) =>
-      ruleMatches(rule, action, this.context),
+      ruleMatches(rule, effectiveAction, this.context),
     );
+
+    if (isUnsupportedModel) {
+      const denyMatch = matches.find((rule) => rule.effect === "deny");
+      if (denyMatch) {
+        return {
+          effect: "deny",
+          ruleId: denyMatch.id,
+          reason: `Matched rule ${denyMatch.id}`,
+        };
+      }
+      return {
+        effect: this.config.default === "deny" ? "deny" : "ask",
+        reason: `Unsupported action model version ${action.actionModelVersion}; conservatively downgraded to unknown`,
+      };
+    }
+
     const selected = matches.find((rule) => rule.effect === "deny") ?? matches[0];
 
     if (!selected) {
-      const uncertain = action.operation === "unknown" ||
-        action.normalization === "ambiguous" ||
-        action.normalization === "unknown";
+      const uncertain = effectiveAction.operation === "unknown" ||
+        effectiveAction.normalization === "ambiguous" ||
+        effectiveAction.normalization === "unknown";
       if (uncertain && this.config.default === "allow") {
         return {
           effect: "ask",
@@ -103,9 +125,17 @@ export class PolicyEngine {
   }
 
   explain(action: NormalizedAction): { action: NormalizedAction; matches: string[]; decision: Decision } {
-    const matches = this.config.rules
-      .filter((rule) => ruleMatches(rule, action, this.context))
-      .map((rule) => rule.id);
-    return { action, matches, decision: this.evaluate(action) };
+    const isUnsupportedModel = action.actionModelVersion !== undefined && action.actionModelVersion !== ACTION_MODEL_VERSION;
+    const effectiveAction: NormalizedAction = isUnsupportedModel
+      ? { ...action, operation: "unknown", normalization: "unknown" }
+      : action;
+    const allMatches = this.config.rules.filter((rule) =>
+      ruleMatches(rule, effectiveAction, this.context),
+    );
+    const matches = (isUnsupportedModel
+      ? allMatches.filter((rule) => rule.effect === "deny")
+      : allMatches
+    ).map((rule) => rule.id);
+    return { action: effectiveAction, matches, decision: this.evaluate(action) };
   }
 }

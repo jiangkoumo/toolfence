@@ -1,25 +1,34 @@
 export { normalizeToolCall } from "./adapters.js";
 export type { ApprovalContext, ApprovalRequester } from "./approval.js";
-export { AuditLogger, readAudit, summarizeAudit, tailAudit } from "./audit.js";
-export type { AuditEvent, AuditRecord, AuditSummary } from "./audit.js";
+export { AUDIT_SCHEMA_VERSION, AuditLogger, readAudit, summarizeAudit, tailAudit } from "./audit.js";
+export type { AuditCorrelation, AuditDecisionContext, AuditEvidenceContext, AuditEvent, AuditRecord, AuditSummary } from "./audit.js";
 export {
   BrokerApprovalRequester,
   brokerProtocolVersion,
   brokerStatus,
   defaultBrokerPaths,
+  isNamedPipePath,
   listApprovals,
   resolveApproval,
   startBroker,
+  verifyWindowsSecurity,
+  type BrokerDecision,
+  type BrokerPaths,
+  type BrokerStatusResult,
+  type BrokerTransportType,
 } from "./broker.js";
 export { initPolicy, loadPolicy, parsePolicy } from "./config.js";
 export {
   generateHostSnippet,
+  getHostSecurityProfile,
   injectHostConfig,
   normalizeHost,
   resolveHostConfigPath,
   supportedHosts,
   type HostConfigOptions,
   type HostInjectResult,
+  type HostNativeBypassTool,
+  type HostSecurityProfile,
   type HostSnippetResult,
   type SupportedHost,
 } from "./host.js";

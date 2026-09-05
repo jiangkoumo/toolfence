@@ -1,8 +1,15 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { brokerStatus, defaultBrokerPaths, type BrokerPaths } from "./broker.js";
+import {
+  brokerStatus,
+  defaultBrokerPaths,
+  isNamedPipePath,
+  verifyWindowsSecurity,
+  type BrokerPaths,
+} from "./broker.js";
 import { loadPolicy } from "./config.js";
 
 export type DoctorStatus = "pass" | "warn" | "fail";
@@ -29,6 +36,7 @@ interface DoctorDependencies {
   brokerPaths?: BrokerPaths;
   nodeVersion?: string;
   platform?: NodeJS.Platform;
+  userHome?: string;
   startupTimeoutMs?: number;
   conformanceRoot?: string;
 }
@@ -247,9 +255,36 @@ export async function diagnose(
   }
 
   const platform = dependencies.platform ?? process.platform;
-  const paths = dependencies.brokerPaths ?? defaultBrokerPaths();
-  if (platform === "win32") {
-    checks.push({ check: "broker", status: "warn", message: "The local Broker is not supported on Windows" });
+  const userHome = dependencies.userHome ?? homedir();
+  const paths = dependencies.brokerPaths ?? defaultBrokerPaths(process.env, userHome, platform);
+  const isWindows = platform === "win32" || isNamedPipePath(paths.socketPath);
+  if (isWindows) {
+    try {
+      verifyWindowsSecurity(paths, userHome);
+      const status = await brokerStatus(paths, platform, userHome);
+      checks.push({
+        check: "broker",
+        status: "pass",
+        message: `Broker protocol ${status.protocolVersion} is ready via user-scoped Named Pipe with private credential storage`,
+      });
+    } catch (error) {
+      const msg = errorMessage(error);
+      if (msg.includes("Insecure Windows configuration")) {
+        checks.push({ check: "broker", status: "fail", message: msg });
+      } else if (
+        msg.includes("authentication") ||
+        msg.includes("protocol negotiation") ||
+        msg.includes("invalid JSON")
+      ) {
+        checks.push({ check: "broker", status: "fail", message: `Broker check failed: ${msg}` });
+      } else {
+        checks.push({
+          check: "broker",
+          status: "warn",
+          message: "Broker is not running; start it with 'toolfence broker'",
+        });
+      }
+    }
   } else if (!existsSync(paths.socketPath)) {
     checks.push({ check: "broker", status: "warn", message: "Broker is not running; start it with 'toolfence broker'" });
   } else {

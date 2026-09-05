@@ -4,7 +4,7 @@ import { createInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
 import { normalizeToolCall } from "./adapters.js";
 import type { ApprovalOutcome, ApprovalRequester } from "./approval.js";
-import type { AuditCorrelation, AuditDecisionContext, AuditLogger } from "./audit.js";
+import type { AuditCorrelation, AuditDecisionContext, AuditEvidenceContext, AuditLogger } from "./audit.js";
 import type { PolicyEngine } from "./policy.js";
 import { redactToolResult } from "./redact.js";
 import { fingerprintToolList } from "./schema.js";
@@ -23,6 +23,9 @@ export interface ProxyOptions {
   errorOutput: Writable;
   env?: NodeJS.ProcessEnv;
   approvalTimeoutMs?: number;
+  host?: string;
+  policyHash?: string;
+  protocolRevision?: string;
 }
 
 export interface ProxyController {
@@ -129,6 +132,7 @@ export function startProxy(options: ProxyOptions): ProxyController {
   const forwarded = new Map<string, ForwardedRequest>();
   const awaiting = new Map<string, AwaitingApproval>();
   const toolFingerprints = new Map<string, string>();
+  let negotiatedProtocolRevision: string | undefined;
   const clientLines = createInterface({ input: options.input, crlfDelay: Infinity });
   const childLines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   let clientClosed = false;
@@ -319,6 +323,12 @@ export function startProxy(options: ProxyOptions): ProxyController {
     }
 
     if (message.method !== "tools/call") {
+      if (message.method === "initialize" && message.params !== null && typeof message.params === "object") {
+        const initParams = message.params as Record<string, unknown>;
+        if (typeof initParams.protocolVersion === "string") {
+          negotiatedProtocolRevision = initParams.protocolVersion;
+        }
+      }
       forward(line, message);
       return;
     }
@@ -398,10 +408,22 @@ export function startProxy(options: ProxyOptions): ProxyController {
     }
 
     const auditCorrelation: AuditCorrelation = { proxyRunId, clientSessionId };
-    const auditContext: AuditDecisionContext = {
+    const metaProtocol = (message.params !== null && typeof message.params === "object")
+      ? ((message.params as Record<string, unknown>)._meta as Record<string, unknown> | undefined)?.protocolVersion
+      : undefined;
+    const protocolRevision = (typeof metaProtocol === "string" ? metaProtocol : undefined)
+      ?? negotiatedProtocolRevision
+      ?? options.protocolRevision;
+
+    const auditContext: AuditEvidenceContext = {
       ...auditCorrelation,
       ...approvalContext,
       ...(decision.effect === "deny" ? { dispatch: "not-forwarded" as const } : {}),
+      host: options.host,
+      protocolRevision,
+      toolFingerprint: toolFingerprints.get(action.tool),
+      actionModelVersion: action.actionModelVersion,
+      policyHash: options.policyHash,
     };
     try {
       options.audit.decision(message.id, action, decision, auditContext);

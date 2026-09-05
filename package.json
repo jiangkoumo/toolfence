@@ -1,6 +1,6 @@
 {
   "name": "toolfence-mcp",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "Local, fail-closed policy enforcement and human approval for MCP tool calls.",
   "repository": {
     "type": "git",

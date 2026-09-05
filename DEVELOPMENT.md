@@ -2,7 +2,7 @@
 
 本文档是 ToolFence 的产品设计、架构约束和开发路线基线。README 面向使用者；本文档面向维护者和贡献者。
 
-当前实现版本为 `0.3.4`。第 2、3 节保留 v0.1/v0.2 的历史设计与验收基线；第 4 节记录基于当前实现、安全修复和 MCP 生态变化重新制定的后续路线。公开优先级以 [`ROADMAP.md`](ROADMAP.md) 为准。
+当前实现版本为 `0.4.0`。第 2、3 节保留 v0.1/v0.2 的历史设计与验收基线；第 4 节记录基于当前实现、安全修复和 MCP 生态变化重新制定的后续路线。公开优先级以 [`ROADMAP.md`](ROADMAP.md) 为准。
 
 与 AgentTape 的双向真实验证遵循 [`docs/AGENTTAPE_TOOLFENCE_ALIGNMENT.md`](docs/AGENTTAPE_TOOLFENCE_ALIGNMENT.md)。开发 ToolFence 时，AgentTape 作为固定版本的伴随观察器记录真实 Codex 失败；该证据补充但不替代 ToolFence 自身的 conformance corpus、`npm run verify` 和发布门槛。
 

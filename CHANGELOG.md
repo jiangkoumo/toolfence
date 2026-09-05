@@ -4,6 +4,26 @@ All notable changes to ToolFence are documented here. The project follows Semant
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-01
+
+### Added
+
+- Platform-neutral Broker IPC abstraction supporting POSIX Unix Domain Sockets and Windows user-scoped Named Pipes (`\\\\.\\pipe\\toolfence-<hash>`).
+- Strict Windows credential storage verification (`verifyWindowsSecurity`) enforcing user-home containment for `broker.token` and fail-closed rejection on insecure or escaping paths without emulating misleading POSIX modes.
+- Versioned Normalized Action Model (`ACTION_MODEL_VERSION = "1.0"`) with conservative downgrade rules in `PolicyEngine`: unknown or future action model versions are conservatively downgraded to `unknown` and require approval (`ask`) under `default: allow` or are denied under `default: deny`.
+- Versioned Audit Evidence Schema (`auditSchemaVersion: 1`) correlating host, protocol revision (`2026-07-28` or legacy), tool schema fingerprint, action-model version, policy hash, approval ID, resolution, and non-forwarding evidence without logging raw arguments or raw results.
+- Host native tool bypass disclosure (`HostSecurityProfile`) for Codex, Cursor, Claude Code, and Claude Desktop, explicitly detailing unmediated built-in tools (e.g. native shell `exec`/`Bash` and direct workspace editing) in CLI and JSON formats.
+
+### Security
+
+- Windows Named Pipe names are strictly user-scoped via cryptographic hashes of user home and username to prevent cross-user collision or eavesdropping.
+- Preserved strict fail-closed boundary across platforms: non-pipe paths and unverified credential directories fail closed during Broker startup and Doctor diagnostics.
+- Added regression tests covering cross-platform Broker lifecycles, action-model version downgrades, and full audit evidence correlation.
+
+### Changed
+
+- Synchronized `conformance/matrix.json` with status `experimental` for Windows Named Pipe Broker; updated test suites and coverage to 19 test files and 141 tests; synchronized documentation and CLI diagnostics for `v0.4.0`.
+
 ## [0.3.4] - 2026-08-31
 
 ### Added

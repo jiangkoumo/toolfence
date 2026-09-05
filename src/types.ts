@@ -1,3 +1,6 @@
+export const ACTION_MODEL_VERSION = "1.0" as const;
+export type ActionModelVersion = typeof ACTION_MODEL_VERSION;
+
 export const operations = [
   "fs.read",
   "fs.write",
@@ -15,6 +18,7 @@ export type Effect = "allow" | "deny" | "ask";
 export type ActionNormalization = "known" | "ambiguous" | "unknown";
 
 export interface NormalizedAction {
+  actionModelVersion?: ActionModelVersion;
   operation: Operation;
   normalization?: ActionNormalization;
   resources: string[];

@@ -1,11 +1,11 @@
 {
   "reportVersion": 1,
   "matrixVersion": 1,
-  "toolfenceVersion": "0.3.4",
+  "toolfenceVersion": "0.4.0",
   "nodeVersion": "22.22.2",
   "os": "darwin",
   "host": "local",
-  "generatedAt": "2026-08-31T12:28:35.208Z",
+  "generatedAt": "2026-09-05T14:02:03.228Z",
   "rows": [
     {
       "id": "stdio-legacy-init",
@@ -13,7 +13,7 @@
       "status": "pass",
       "cases": 12,
       "failures": [],
-      "verifiedAt": "2026-08-31T12:28:34.224Z"
+      "verifiedAt": "2026-09-05T14:02:02.261Z"
     },
     {
       "id": "stdio-legacy-init",
@@ -21,7 +21,7 @@
       "status": "pass",
       "cases": 12,
       "failures": [],
-      "verifiedAt": "2026-08-31T12:28:34.686Z"
+      "verifiedAt": "2026-09-05T14:02:02.726Z"
     },
     {
       "id": "stdio-2026-stateless",
@@ -29,7 +29,7 @@
       "status": "pass",
       "cases": 13,
       "failures": [],
-      "verifiedAt": "2026-08-31T12:28:35.162Z"
+      "verifiedAt": "2026-09-05T14:02:03.183Z"
     }
   ]
 }

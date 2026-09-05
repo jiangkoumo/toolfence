@@ -1,6 +1,6 @@
 import { isAbsolute, join } from "node:path";
 import { canonicalizePath } from "./paths.js";
-import type { NormalizedAction, Operation } from "./types.js";
+import { ACTION_MODEL_VERSION, type NormalizedAction, type Operation } from "./types.js";
 
 const filesystemOperations: Record<string, Operation> = {
   read_file: "fs.read",
@@ -103,6 +103,7 @@ function normalizeAgentTape(
 
   if (agentTapeReadTools.has(name)) {
     return {
+      actionModelVersion: ACTION_MODEL_VERSION,
       operation: "fs.read",
       normalization: argumentsAreObject && workspaceRoot ? "known" : "ambiguous",
       resources: workspaceRoot
@@ -120,6 +121,7 @@ function normalizeAgentTape(
     ? canonicalizePath(join(workspaceRoot, "tests", "agenttape", filename), workspace)
     : undefined;
   return {
+    actionModelVersion: ACTION_MODEL_VERSION,
     operation: "fs.write",
     normalization: argumentsAreObject && target ? "known" : "ambiguous",
     resources: target ? [target] : [],
@@ -199,6 +201,7 @@ function normalizeShell(
     ? "known"
     : "ambiguous";
   return {
+    actionModelVersion: ACTION_MODEL_VERSION,
     operation: gitOperation ?? "shell.exec",
     normalization,
     resources: [],
@@ -249,6 +252,7 @@ function normalizeGit(server: string, tool: string, rawArguments: unknown): Norm
   }
   const operation = argv ? classifyGit(argv.slice(1)) : undefined;
   return {
+    actionModelVersion: ACTION_MODEL_VERSION,
     operation: operation ?? "unknown",
     normalization: operation ? "known" : "unknown",
     resources: [],
@@ -268,6 +272,7 @@ function normalizeHttp(server: string, tool: string, rawArguments: unknown): Nor
   const rawUrl = args.redirectUrl ?? args.redirect_url ?? args.url ?? args.uri ?? args.endpoint;
   if (typeof rawUrl !== "string") {
     return {
+      actionModelVersion: ACTION_MODEL_VERSION,
       operation: "unknown",
       normalization: "unknown",
       resources: [],
@@ -281,6 +286,7 @@ function normalizeHttp(server: string, tool: string, rawArguments: unknown): Nor
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("scheme");
     const method = typeof args.method === "string" ? args.method.toUpperCase() : "GET";
     return {
+      actionModelVersion: ACTION_MODEL_VERSION,
       operation: "net.request",
       normalization: args.method === undefined || typeof args.method === "string"
         ? "known"
@@ -298,6 +304,7 @@ function normalizeHttp(server: string, tool: string, rawArguments: unknown): Nor
     };
   } catch {
     return {
+      actionModelVersion: ACTION_MODEL_VERSION,
       operation: "unknown",
       normalization: "unknown",
       resources: [],
@@ -326,6 +333,7 @@ export function normalizeToolCall(
       canonicalizePath(value, workspace),
     );
     return {
+      actionModelVersion: ACTION_MODEL_VERSION,
       operation: filesystemOperations[name],
       normalization: filesystemArgumentsAreKnown(name, args, resources) ? "known" : "ambiguous",
       resources,
@@ -343,6 +351,7 @@ export function normalizeToolCall(
   if (httpTools.has(name)) return normalizeHttp(server, tool, rawArguments);
 
   return {
+    actionModelVersion: ACTION_MODEL_VERSION,
     operation: "unknown",
     normalization: "unknown",
     resources: [],

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { readFileSync, realpathSync } from "node:fs";
 import { stdin as input, stdout as output } from "node:process";
@@ -408,6 +409,12 @@ function formatAuditSummary(summary: AuditSummary): string {
 
 async function runWrap(options: WrapOptions): Promise<void> {
   const policy = loadPolicy(options.policy);
+  let policyHash: string | undefined;
+  try {
+    policyHash = createHash("sha256").update(readFileSync(options.policy, "utf8")).digest("hex");
+  } catch {
+    policyHash = undefined;
+  }
   const engine = new PolicyEngine(policy, {
     workspace: options.workspace,
     home: canonicalizePath(homedir(), homedir()),
@@ -427,6 +434,8 @@ async function runWrap(options: WrapOptions): Promise<void> {
     input: process.stdin,
     output: process.stdout,
     errorOutput: process.stderr,
+    policyHash,
+    host: process.env.TOOLFENCE_HOST,
   });
   const forwardSignal = (signal: NodeJS.Signals) => controller.child.kill(signal);
   process.once("SIGINT", () => forwardSignal("SIGINT"));
@@ -505,7 +514,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
           process.stdout.write(`${JSON.stringify(result)}\n`);
         } else {
           process.stdout.write(
-            `${result.created ? "Created" : "Updated"} ${result.host} config: ${result.configPath}${result.backupPath ? ` (backup: ${result.backupPath})` : ""}\n\n${result.content}`,
+            `${result.created ? "Created" : "Updated"} ${result.host} config: ${result.configPath}${result.backupPath ? ` (backup: ${result.backupPath})` : ""}\n\n${result.content}\nHost security note: ${result.securityProfile.bypassWarning}\n`,
           );
         }
         return;
@@ -515,7 +524,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
         process.stdout.write(`${JSON.stringify(result)}\n`);
       } else {
         process.stdout.write(
-          `Target configuration: ${result.configPath}\nTo write this configuration directly, pass --write.\n\n${result.rendered}\n`,
+          `Target configuration: ${result.configPath}\nTo write this configuration directly, pass --write.\n\n${result.rendered}\nHost security note: ${result.securityProfile.bypassWarning}\n`,
         );
       }
       return;

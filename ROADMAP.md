@@ -1,6 +1,6 @@
 # ToolFence roadmap
 
-Last reviewed: 2026-08-31. Current release: `v0.3.4`.
+Last reviewed: 2026-09-01. Current release: `v0.4.0`.
 
 ToolFence is an early-stage security project. This roadmap communicates priorities and release gates, not dates. Security invariants, fail-closed behavior, and evidence-backed compatibility claims take precedence over feature count.
 
@@ -17,14 +17,19 @@ The next releases are ordered around four observations:
 
 Planning inputs include the [MCP `2026-07-28` release](https://blog.modelcontextprotocol.io/posts/2026-07-28/), the [current MCP transport specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports), and the [August 2026 MCP roadmap](https://blog.modelcontextprotocol.io/posts/mcp-roadmap/).
 
-## Shipped baseline: v0.3.4
+## Shipped baseline: v0.4.0
 
 The current release includes:
 
+- platform-neutral Broker IPC transport supporting POSIX Unix Domain Sockets and Windows user-scoped Named Pipes (`\\\\.\\pipe\\toolfence-<hash>`);
+- strict Windows credential storage verification enforcing user-home containment for `broker.token` and fail-closed rejection on insecure or escaping paths without emulating misleading POSIX modes;
+- versioned Normalized Action Model (`ACTION_MODEL_VERSION = "1.0"`) with conservative downgrade rules in `PolicyEngine`: unknown or future action model versions are conservatively downgraded to `unknown` and require approval (`ask`) under `default: allow` or are denied under `default: deny`;
+- versioned Audit Evidence Schema (`auditSchemaVersion: 1`) correlating Host, protocol revision (`2026-07-28` or legacy), tool schema fingerprint, action-model version, policy hash, approval ID, resolution, and non-forwarding evidence without logging raw arguments or raw results;
+- Host native tool bypass disclosures (`HostSecurityProfile`) for Codex, Cursor, Claude Code, and Claude Desktop, explicitly detailing unmediated built-in tools (such as native shell `exec`/`Bash` and direct workspace editing) in CLI and JSON formats;
 - deterministic `allow`, `ask`, and `deny` policy evaluation with conservative Filesystem, Shell, Git, and HTTP normalization;
 - uncertain or malformed actions require approval instead of inheriting `default: allow`, unless an explicit matching rule authorizes them;
 - in-flight request tracking fails closed at capacity, rejects duplicate IDs, and preserves accepted tool-result redaction and audit correlation until terminal response;
-- authenticated POSIX approval Broker, one-time and session decisions, cancellation during connection or queueing, timeout, and Schema-fingerprint invalidation;
+- authenticated approval Broker, one-time and session decisions, cancellation during connection or queueing, timeout, and Schema-fingerprint invalidation;
 - privacy-safe audit correlation across proxy runs and client sessions, exact approval resolution, explicit non-forwarding evidence, and MCP `isError` result handling;
 - conservative AgentTape normalization for its four fenced read/write tools, with unknown aliases and tools remaining unknown;
 - six curated policy recipes (`filesystem`, `github`, `fetch`, `sqlite`, `postgres`, `git`);
@@ -37,34 +42,11 @@ The current release includes:
 The current boundary remains intentionally narrow:
 
 - MCP proxy transport is stdio only;
-- interactive Broker transport is POSIX only, while Windows remains non-interactive and fail-closed;
 - the upstream MCP Server keeps the operating-system permissions and environment of the ToolFence process;
 - unverified or unsupported protocol/transport combinations are reported as such and never expand permissions;
-- cross-Host end-to-end evidence, an explicitly versioned action model, and a versioned audit evidence contract are not yet shipped.
+- Streamable HTTP, OAuth token brokering, and operating system sandboxing are not yet shipped.
 
-## Now: v0.4 cross-platform enforcement baseline
-
-**Outcome:** provide the same safe approval and evidence contract across supported local Hosts and operating systems.
-
-Planned work:
-
-- Introduce a platform-neutral Broker transport abstraction and a Windows implementation using a user-scoped Named Pipe only after access-control and lifecycle review.
-- Add Windows CI and exercise authentication, owner-only access, startup races, cancellation, timeout, disconnect, session invalidation, and cleanup.
-- Keep Windows fail-closed if the runtime cannot prove private IPC and credential storage; do not emulate POSIX permission checks with misleading success.
-- Version the normalized action model independently from the policy Schema and document compatibility and conservative downgrade rules.
-- Version the audit evidence Schema and correlate the configured Host, MCP protocol revision, Server, tool and Schema fingerprint, action-model version, policy identity, rule ID, decision, and privacy-safe result summary.
-- Maintain tested Codex, Claude Code, Cursor, and Claude Desktop setup paths, while explicitly reporting Host-native tools that can bypass the MCP proxy.
-
-Release gates:
-
-1. `ask` works through private local IPC on macOS, Linux, and supported native Windows environments; every IPC failure path denies the call.
-2. Every `supported` Host × OS matrix row passes the same conformance corpus covering `allow`/`ask`/`deny`, unknown or ambiguous actions, mixed resources, cancellation, and Schema changes, with identical decisions for equivalent actions.
-3. Audit records are migratable, validate strictly, omit raw arguments/results/credentials, and fully explain the supported decision path.
-4. A new user can complete the first protected stdio tool call in under ten minutes using documented steps and `toolfence doctor`.
-
-Non-goals for v0.4: cloud approval, a team console, remote policy distribution, automatic permanent policy edits, or a general operating-system sandbox.
-
-## Next: v0.5-alpha constrained Streamable HTTP
+## Now: v0.5-alpha constrained Streamable HTTP
 
 **Outcome:** validate one narrowly defined remote-transport topology without turning ToolFence into a generic HTTP proxy or credential broker.
 
