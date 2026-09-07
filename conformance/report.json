@@ -5,7 +5,7 @@
   "nodeVersion": "22.22.2",
   "os": "darwin",
   "host": "local",
-  "generatedAt": "2026-09-05T14:02:03.228Z",
+  "generatedAt": "2026-09-07T15:03:40.121Z",
   "rows": [
     {
       "id": "stdio-legacy-init",
@@ -13,7 +13,7 @@
       "status": "pass",
       "cases": 12,
       "failures": [],
-      "verifiedAt": "2026-09-05T14:02:02.261Z"
+      "verifiedAt": "2026-09-07T15:03:39.185Z"
     },
     {
       "id": "stdio-legacy-init",
@@ -21,7 +21,7 @@
       "status": "pass",
       "cases": 12,
       "failures": [],
-      "verifiedAt": "2026-09-05T14:02:02.726Z"
+      "verifiedAt": "2026-09-07T15:03:39.630Z"
     },
     {
       "id": "stdio-2026-stateless",
@@ -29,7 +29,7 @@
       "status": "pass",
       "cases": 13,
       "failures": [],
-      "verifiedAt": "2026-09-05T14:02:03.183Z"
+      "verifiedAt": "2026-09-07T15:03:40.076Z"
     }
   ]
 }
